@@ -1,10 +1,12 @@
 """Support for Lutron Caseta switches."""
 import logging
 
-from homeassistant.components.switch import DOMAIN, SwitchEntity
-
 from . import LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
+from homeassistant.components.switch import DOMAIN
+from homeassistant.components.switch import SwitchEntity
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -3,44 +3,46 @@ import asyncio
 import functools
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import List
+from typing import Optional
 
-from aioesphomeapi import (
-    APIClient,
-    APIConnectionError,
-    DeviceInfo,
-    EntityInfo,
-    EntityState,
-    HomeassistantServiceCall,
-    UserService,
-    UserServiceArgType,
-)
 import voluptuous as vol
+from aioesphomeapi import APIClient
+from aioesphomeapi import APIConnectionError
+from aioesphomeapi import DeviceInfo
+from aioesphomeapi import EntityInfo
+from aioesphomeapi import EntityState
+from aioesphomeapi import HomeassistantServiceCall
+from aioesphomeapi import UserService
+from aioesphomeapi import UserServiceArgType
 
+import homeassistant.helpers.config_validation as cv
+import homeassistant.helpers.device_registry as dr
+from .entry_data import RuntimeEntryData
 from homeassistant import const
 from homeassistant.components import zeroconf
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    EVENT_HOMEASSISTANT_STOP,
-)
-from homeassistant.core import Event, State, callback
+from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_PORT
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import callback
+from homeassistant.core import Event
+from homeassistant.core import State
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers import template
-import homeassistant.helpers.config_validation as cv
-import homeassistant.helpers.device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.json import JSONEncoder
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.template import Template
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
-
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.typing import HomeAssistantType
 # Import config flow so that it's added to the registry
-from .entry_data import RuntimeEntryData
 
 DOMAIN = "esphome"
 _LOGGER = logging.getLogger(__name__)

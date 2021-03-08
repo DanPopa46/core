@@ -1,19 +1,21 @@
 """Generic Z-Wave Entity Class."""
-
 import logging
-from typing import List, Optional, Union
+from typing import List
+from typing import Optional
+from typing import Union
 
 from zwave_js_server.client import Client as ZwaveClient
-from zwave_js_server.model.value import Value as ZwaveValue, get_value_id
+from zwave_js_server.model.value import get_value_id
+from zwave_js_server.model.value import Value as ZwaveValue
 
+from .const import DOMAIN
+from .discovery import ZwaveDiscoveryInfo
+from .helpers import get_device_id
+from .helpers import get_unique_id
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
-
-from .const import DOMAIN
-from .discovery import ZwaveDiscoveryInfo
-from .helpers import get_device_id, get_unique_id
 
 LOGGER = logging.getLogger(__name__)
 

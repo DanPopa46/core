@@ -1,30 +1,26 @@
 """The sensor tests for the AEMET OpenData platform."""
-
 from unittest.mock import patch
 
-from homeassistant.components.aemet.const import ATTRIBUTION
-from homeassistant.components.weather import (
-    ATTR_CONDITION_PARTLYCLOUDY,
-    ATTR_CONDITION_SNOWY,
-    ATTR_FORECAST,
-    ATTR_FORECAST_CONDITION,
-    ATTR_FORECAST_PRECIPITATION,
-    ATTR_FORECAST_PRECIPITATION_PROBABILITY,
-    ATTR_FORECAST_TEMP,
-    ATTR_FORECAST_TEMP_LOW,
-    ATTR_FORECAST_TIME,
-    ATTR_FORECAST_WIND_BEARING,
-    ATTR_FORECAST_WIND_SPEED,
-    ATTR_WEATHER_HUMIDITY,
-    ATTR_WEATHER_PRESSURE,
-    ATTR_WEATHER_TEMPERATURE,
-    ATTR_WEATHER_WIND_BEARING,
-    ATTR_WEATHER_WIND_SPEED,
-)
-from homeassistant.const import ATTR_ATTRIBUTION
 import homeassistant.util.dt as dt_util
-
 from .util import async_init_integration
+from homeassistant.components.aemet.const import ATTRIBUTION
+from homeassistant.components.weather import ATTR_CONDITION_PARTLYCLOUDY
+from homeassistant.components.weather import ATTR_CONDITION_SNOWY
+from homeassistant.components.weather import ATTR_FORECAST
+from homeassistant.components.weather import ATTR_FORECAST_CONDITION
+from homeassistant.components.weather import ATTR_FORECAST_PRECIPITATION
+from homeassistant.components.weather import ATTR_FORECAST_PRECIPITATION_PROBABILITY
+from homeassistant.components.weather import ATTR_FORECAST_TEMP
+from homeassistant.components.weather import ATTR_FORECAST_TEMP_LOW
+from homeassistant.components.weather import ATTR_FORECAST_TIME
+from homeassistant.components.weather import ATTR_FORECAST_WIND_BEARING
+from homeassistant.components.weather import ATTR_FORECAST_WIND_SPEED
+from homeassistant.components.weather import ATTR_WEATHER_HUMIDITY
+from homeassistant.components.weather import ATTR_WEATHER_PRESSURE
+from homeassistant.components.weather import ATTR_WEATHER_TEMPERATURE
+from homeassistant.components.weather import ATTR_WEATHER_WIND_BEARING
+from homeassistant.components.weather import ATTR_WEATHER_WIND_SPEED
+from homeassistant.const import ATTR_ATTRIBUTION
 
 
 async def test_aemet_weather(hass):

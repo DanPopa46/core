@@ -1,15 +1,11 @@
 """The sensor tests for the AEMET OpenData platform."""
-
 from unittest.mock import patch
 
-from homeassistant.components.weather import (
-    ATTR_CONDITION_PARTLYCLOUDY,
-    ATTR_CONDITION_SNOWY,
-)
-from homeassistant.const import STATE_UNKNOWN
 import homeassistant.util.dt as dt_util
-
 from .util import async_init_integration
+from homeassistant.components.weather import ATTR_CONDITION_PARTLYCLOUDY
+from homeassistant.components.weather import ATTR_CONDITION_SNOWY
+from homeassistant.const import STATE_UNKNOWN
 
 
 async def test_aemet_forecast_create_sensors(hass):

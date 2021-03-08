@@ -2,16 +2,21 @@
 import logging
 from typing import Optional
 
-from pylutron_caseta import FAN_HIGH, FAN_LOW, FAN_MEDIUM, FAN_MEDIUM_HIGH, FAN_OFF
-
-from homeassistant.components.fan import DOMAIN, SUPPORT_SET_SPEED, FanEntity
-from homeassistant.util.percentage import (
-    ordered_list_item_to_percentage,
-    percentage_to_ordered_list_item,
-)
+from pylutron_caseta import FAN_HIGH
+from pylutron_caseta import FAN_LOW
+from pylutron_caseta import FAN_MEDIUM
+from pylutron_caseta import FAN_MEDIUM_HIGH
+from pylutron_caseta import FAN_OFF
 
 from . import LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
+from homeassistant.components.fan import DOMAIN
+from homeassistant.components.fan import FanEntity
+from homeassistant.components.fan import SUPPORT_SET_SPEED
+from homeassistant.util.percentage import ordered_list_item_to_percentage
+from homeassistant.util.percentage import percentage_to_ordered_list_item
 
 _LOGGER = logging.getLogger(__name__)
 

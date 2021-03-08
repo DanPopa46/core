@@ -1,21 +1,18 @@
 """Support for MyChevy sensors."""
 import logging
 
+from . import DOMAIN as MYCHEVY_DOMAIN
+from . import ERROR_TOPIC
+from . import EVSensorConfig
+from . import MYCHEVY_ERROR
+from . import MYCHEVY_SUCCESS
+from . import UPDATE_TOPIC
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.icon import icon_for_battery_level
 from homeassistant.util import slugify
-
-from . import (
-    DOMAIN as MYCHEVY_DOMAIN,
-    ERROR_TOPIC,
-    MYCHEVY_ERROR,
-    MYCHEVY_SUCCESS,
-    UPDATE_TOPIC,
-    EVSensorConfig,
-)
 
 _LOGGER = logging.getLogger(__name__)
 

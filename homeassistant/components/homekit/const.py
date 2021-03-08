@@ -1,5 +1,4 @@
 """Constants used be the HomeKit component."""
-
 # #### Misc ####
 DEBOUNCE_TIMEOUT = 0.5
 DEVICE_PRECISION_LEEWAY = 6

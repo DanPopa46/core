@@ -1,33 +1,30 @@
 """The tests for the UniFi device tracker platform."""
-
 from datetime import timedelta
 from unittest.mock import patch
 
-from aiounifi.controller import (
-    MESSAGE_CLIENT,
-    MESSAGE_CLIENT_REMOVED,
-    MESSAGE_DEVICE,
-    MESSAGE_EVENT,
-)
-from aiounifi.websocket import STATE_DISCONNECTED, STATE_RUNNING
+from aiounifi.controller import MESSAGE_CLIENT
+from aiounifi.controller import MESSAGE_CLIENT_REMOVED
+from aiounifi.controller import MESSAGE_DEVICE
+from aiounifi.controller import MESSAGE_EVENT
+from aiounifi.websocket import STATE_DISCONNECTED
+from aiounifi.websocket import STATE_RUNNING
 
+import homeassistant.util.dt as dt_util
+from .test_controller import ENTRY_CONFIG
+from .test_controller import setup_unifi_integration
 from homeassistant import config_entries
 from homeassistant.components.device_tracker import DOMAIN as TRACKER_DOMAIN
-from homeassistant.components.unifi.const import (
-    CONF_BLOCK_CLIENT,
-    CONF_IGNORE_WIRED_BUG,
-    CONF_SSID_FILTER,
-    CONF_TRACK_CLIENTS,
-    CONF_TRACK_DEVICES,
-    CONF_TRACK_WIRED_CLIENTS,
-    DOMAIN as UNIFI_DOMAIN,
-)
-from homeassistant.const import STATE_HOME, STATE_NOT_HOME, STATE_UNAVAILABLE
+from homeassistant.components.unifi.const import CONF_BLOCK_CLIENT
+from homeassistant.components.unifi.const import CONF_IGNORE_WIRED_BUG
+from homeassistant.components.unifi.const import CONF_SSID_FILTER
+from homeassistant.components.unifi.const import CONF_TRACK_CLIENTS
+from homeassistant.components.unifi.const import CONF_TRACK_DEVICES
+from homeassistant.components.unifi.const import CONF_TRACK_WIRED_CLIENTS
+from homeassistant.components.unifi.const import DOMAIN as UNIFI_DOMAIN
+from homeassistant.const import STATE_HOME
+from homeassistant.const import STATE_NOT_HOME
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers import entity_registry
-import homeassistant.util.dt as dt_util
-
-from .test_controller import ENTRY_CONFIG, setup_unifi_integration
-
 from tests.common import async_fire_time_changed
 
 

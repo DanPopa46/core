@@ -1,42 +1,45 @@
 """Handle MySensors gateways."""
 import asyncio
-from collections import defaultdict
 import logging
 import socket
 import sys
-from typing import Any, Callable, Coroutine, Dict, Optional
+from collections import defaultdict
+from typing import Any
+from typing import Callable
+from typing import Coroutine
+from typing import Dict
+from typing import Optional
 
 import async_timeout
-from mysensors import BaseAsyncGateway, Message, Sensor, mysensors
 import voluptuous as vol
+from mysensors import BaseAsyncGateway
+from mysensors import Message
+from mysensors import mysensors
+from mysensors import Sensor
 
+import homeassistant.helpers.config_validation as cv
+from .const import CONF_BAUD_RATE
+from .const import CONF_DEVICE
+from .const import CONF_PERSISTENCE_FILE
+from .const import CONF_RETAIN
+from .const import CONF_TCP_PORT
+from .const import CONF_TOPIC_IN_PREFIX
+from .const import CONF_TOPIC_OUT_PREFIX
+from .const import CONF_VERSION
+from .const import DOMAIN
+from .const import GatewayId
+from .const import MYSENSORS_GATEWAY_START_TASK
+from .const import MYSENSORS_GATEWAYS
+from .handler import HANDLERS
+from .helpers import discover_mysensors_platform
+from .helpers import on_unload
+from .helpers import validate_child
+from .helpers import validate_node
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import Event, callback
-import homeassistant.helpers.config_validation as cv
+from homeassistant.core import callback
+from homeassistant.core import Event
 from homeassistant.helpers.typing import HomeAssistantType
-
-from .const import (
-    CONF_BAUD_RATE,
-    CONF_DEVICE,
-    CONF_PERSISTENCE_FILE,
-    CONF_RETAIN,
-    CONF_TCP_PORT,
-    CONF_TOPIC_IN_PREFIX,
-    CONF_TOPIC_OUT_PREFIX,
-    CONF_VERSION,
-    DOMAIN,
-    MYSENSORS_GATEWAY_START_TASK,
-    MYSENSORS_GATEWAYS,
-    GatewayId,
-)
-from .handler import HANDLERS
-from .helpers import (
-    discover_mysensors_platform,
-    on_unload,
-    validate_child,
-    validate_node,
-)
 
 _LOGGER = logging.getLogger(__name__)
 

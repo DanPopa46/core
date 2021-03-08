@@ -2,7 +2,8 @@
 import asyncio
 import copy
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 from zwave_js_server.event import Event
@@ -11,8 +12,8 @@ from zwave_js_server.model.node import Node
 from zwave_js_server.version import VersionInfo
 
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
-
-from tests.common import MockConfigEntry, load_fixture
+from tests.common import load_fixture
+from tests.common import MockConfigEntry
 
 # Add-on fixtures
 

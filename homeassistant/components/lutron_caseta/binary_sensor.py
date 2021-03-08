@@ -1,13 +1,12 @@
 """Support for Lutron Caseta Occupancy/Vacancy Sensors."""
 from pylutron_caseta import OCCUPANCY_GROUP_OCCUPIED
 
-from homeassistant.components.binary_sensor import (
-    DEVICE_CLASS_OCCUPANCY,
-    BinarySensorEntity,
-)
-
-from . import DOMAIN as CASETA_DOMAIN, LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP
+from . import DOMAIN as CASETA_DOMAIN
+from . import LutronCasetaDevice
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import DEVICE_CLASS_OCCUPANCY
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

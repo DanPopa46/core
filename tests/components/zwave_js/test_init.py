@@ -1,30 +1,27 @@
 """Test the Z-Wave JS init module."""
 from copy import deepcopy
-from unittest.mock import call, patch
+from unittest.mock import call
+from unittest.mock import patch
 
 import pytest
-from zwave_js_server.exceptions import BaseZwaveJSServerError, InvalidServerVersion
+from zwave_js_server.exceptions import BaseZwaveJSServerError
+from zwave_js_server.exceptions import InvalidServerVersion
 from zwave_js_server.model.node import Node
 
+from .common import AIR_TEMPERATURE_SENSOR
+from .common import EATON_RF9640_ENTITY
+from .common import NOTIFICATION_MOTION_BINARY_SENSOR
 from homeassistant.components.hassio.handler import HassioAPIError
 from homeassistant.components.zwave_js.const import DOMAIN
 from homeassistant.components.zwave_js.helpers import get_device_id
-from homeassistant.config_entries import (
-    CONN_CLASS_LOCAL_PUSH,
-    DISABLED_USER,
-    ENTRY_STATE_LOADED,
-    ENTRY_STATE_NOT_LOADED,
-    ENTRY_STATE_SETUP_RETRY,
-)
+from homeassistant.config_entries import CONN_CLASS_LOCAL_PUSH
+from homeassistant.config_entries import DISABLED_USER
+from homeassistant.config_entries import ENTRY_STATE_LOADED
+from homeassistant.config_entries import ENTRY_STATE_NOT_LOADED
+from homeassistant.config_entries import ENTRY_STATE_SETUP_RETRY
 from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.helpers import device_registry, entity_registry
-
-from .common import (
-    AIR_TEMPERATURE_SENSOR,
-    EATON_RF9640_ENTITY,
-    NOTIFICATION_MOTION_BINARY_SENSOR,
-)
-
+from homeassistant.helpers import device_registry
+from homeassistant.helpers import entity_registry
 from tests.common import MockConfigEntry
 
 

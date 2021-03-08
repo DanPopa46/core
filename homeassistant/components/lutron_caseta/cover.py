@@ -1,19 +1,18 @@
 """Support for Lutron Caseta shades."""
 import logging
 
-from homeassistant.components.cover import (
-    ATTR_POSITION,
-    DEVICE_CLASS_SHADE,
-    DOMAIN,
-    SUPPORT_CLOSE,
-    SUPPORT_OPEN,
-    SUPPORT_SET_POSITION,
-    SUPPORT_STOP,
-    CoverEntity,
-)
-
 from . import LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
+from homeassistant.components.cover import ATTR_POSITION
+from homeassistant.components.cover import CoverEntity
+from homeassistant.components.cover import DEVICE_CLASS_SHADE
+from homeassistant.components.cover import DOMAIN
+from homeassistant.components.cover import SUPPORT_CLOSE
+from homeassistant.components.cover import SUPPORT_OPEN
+from homeassistant.components.cover import SUPPORT_SET_POSITION
+from homeassistant.components.cover import SUPPORT_STOP
 
 _LOGGER = logging.getLogger(__name__)
 

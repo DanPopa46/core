@@ -1,9 +1,9 @@
 """Support for Lutron Caseta scenes."""
 from typing import Any
 
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
 from homeassistant.components.scene import Scene
-
-from .const import BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
