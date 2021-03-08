@@ -33,7 +33,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaLight(LutronCasetaDevice, SwitchEntity):
     """Representation of a Lutron Caseta switch."""
-
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
         await self._smartbridge.turn_on(self.device_id)

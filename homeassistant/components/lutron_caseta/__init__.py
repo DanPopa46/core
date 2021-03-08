@@ -44,16 +44,15 @@ DATA_BRIDGE_CONFIG = "lutron_caseta_bridges"
 
 CONFIG_SCHEMA = vol.Schema(
     {
-        DOMAIN: vol.All(
+        DOMAIN:
+        vol.All(
             cv.ensure_list,
-            [
-                {
-                    vol.Required(CONF_HOST): cv.string,
-                    vol.Required(CONF_KEYFILE): cv.string,
-                    vol.Required(CONF_CERTFILE): cv.string,
-                    vol.Required(CONF_CA_CERTS): cv.string,
-                }
-            ],
+            [{
+                vol.Required(CONF_HOST): cv.string,
+                vol.Required(CONF_KEYFILE): cv.string,
+                vol.Required(CONF_CERTFILE): cv.string,
+                vol.Required(CONF_CA_CERTS): cv.string,
+            }],
         )
     },
     extra=vol.ALLOW_EXTRA,
@@ -80,8 +79,7 @@ async def async_setup(hass, base_config):
                         CONF_CERTFILE: config[CONF_CERTFILE],
                         CONF_CA_CERTS: config[CONF_CA_CERTS],
                     },
-                )
-            )
+                ))
 
     return True
 
@@ -95,11 +93,13 @@ async def async_setup_entry(hass, config_entry):
     bridge = None
 
     try:
-        bridge = Smartbridge.create_tls(
-            hostname=host, keyfile=keyfile, certfile=certfile, ca_certs=ca_certs
-        )
+        bridge = Smartbridge.create_tls(hostname=host,
+                                        keyfile=keyfile,
+                                        certfile=certfile,
+                                        ca_certs=ca_certs)
     except ssl.SSLError:
-        _LOGGER.error("Invalid certificate used to connect to bridge at %s", host)
+        _LOGGER.error("Invalid certificate used to connect to bridge at %s",
+                      host)
         return False
 
     timed_out = True
@@ -118,7 +118,8 @@ async def async_setup_entry(hass, config_entry):
 
     devices = bridge.get_devices()
     bridge_device = devices[BRIDGE_DEVICE_ID]
-    await _async_register_bridge_device(hass, config_entry.entry_id, bridge_device)
+    await _async_register_bridge_device(hass, config_entry.entry_id,
+                                        bridge_device)
     # Store this bridge (keyed by entry_id) so it can be retrieved by the
     # platforms we're setting up.
     hass.data[DOMAIN][config_entry.entry_id] = {
@@ -136,8 +137,8 @@ async def async_setup_entry(hass, config_entry):
 
     for platform in PLATFORMS:
         hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(config_entry, platform)
-        )
+            hass.config_entries.async_forward_entry_setup(
+                config_entry, platform))
 
     return True
 
@@ -163,8 +164,7 @@ async def async_setup_lip(hass, config_entry, lip_devices):
     _LOGGER.debug("Connected to Lutron Caseta bridge via LIP at %s:23", host)
     button_devices_by_lip_id = _async_merge_lip_leap_data(lip_devices, bridge)
     button_devices_by_dr_id = await _async_register_button_devices(
-        hass, config_entry_id, bridge_device, button_devices_by_lip_id
-    )
+        hass, config_entry_id, bridge_device, button_devices_by_lip_id)
     _async_subscribe_pico_remote_events(hass, lip, button_devices_by_lip_id)
     data[BUTTON_DEVICES] = button_devices_by_dr_id
     data[BRIDGE_LIP] = lip
@@ -176,9 +176,13 @@ def _async_merge_lip_leap_data(lip_devices, bridge):
     sensor_devices = bridge.get_devices_by_domain("sensor")
 
     button_devices_by_id = {
-        id: device for id, device in lip_devices.items() if "Buttons" in device
+        id: device
+        for id, device in lip_devices.items() if "Buttons" in device
     }
-    sensor_devices_by_name = {device["name"]: device for device in sensor_devices}
+    sensor_devices_by_name = {
+        device["name"]: device
+        for device in sensor_devices
+    }
 
     # Add the leap data into the lip data
     # so we know the type, model, and serial
@@ -211,9 +215,8 @@ async def _async_register_bridge_device(hass, config_entry_id, bridge_device):
     )
 
 
-async def _async_register_button_devices(
-    hass, config_entry_id, bridge_device, button_devices_by_id
-):
+async def _async_register_button_devices(hass, config_entry_id, bridge_device,
+                                         button_devices_by_id):
     """Register button devices (Pico Remotes) in the device registry."""
     device_registry = await dr.async_get_registry(hass)
     button_devices_by_dr_id = {}
@@ -240,7 +243,6 @@ async def _async_register_button_devices(
 @callback
 def _async_subscribe_pico_remote_events(hass, lip, button_devices_by_id):
     """Subscribe to lutron events."""
-
     @callback
     def _async_lip_event(lip_message):
         if lip_message.mode != LIPMode.DEVICE:
@@ -280,14 +282,10 @@ async def async_unload_entry(hass, config_entry):
     if data[BRIDGE_LIP]:
         await data[BRIDGE_LIP].async_stop()
 
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(config_entry, platform)
-                for platform in PLATFORMS
-            ]
-        )
-    )
+    unload_ok = all(await asyncio.gather(*[
+        hass.config_entries.async_forward_entry_unload(config_entry, platform)
+        for platform in PLATFORMS
+    ]))
 
     if unload_ok:
         hass.data[DOMAIN].pop(config_entry.entry_id)
@@ -297,7 +295,6 @@ async def async_unload_entry(hass, config_entry):
 
 class LutronCasetaDevice(Entity):
     """Common base class for all Lutron Caseta devices."""
-
     def __init__(self, device, bridge, bridge_device):
         """Set up the base class.
 
@@ -311,7 +308,8 @@ class LutronCasetaDevice(Entity):
 
     async def async_added_to_hass(self):
         """Register callbacks."""
-        self._smartbridge.add_subscriber(self.device_id, self.async_write_ha_state)
+        self._smartbridge.add_subscriber(self.device_id,
+                                         self.async_write_ha_state)
 
     @property
     def device_id(self):

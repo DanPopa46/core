@@ -39,9 +39,9 @@ _LOGGER = logging.getLogger(__name__)
 SCHEMAS = Registry()
 
 
-async def on_unload(
-    hass: HomeAssistantType, entry: Union[ConfigEntry, GatewayId], fnct: Callable
-) -> None:
+async def on_unload(hass: HomeAssistantType, entry: Union[ConfigEntry,
+                                                          GatewayId],
+                    fnct: Callable) -> None:
     """Register a callback to be called when entry is unloaded.
 
     This function is used by platforms to cleanup after themselves.
@@ -57,11 +57,12 @@ async def on_unload(
 
 
 @callback
-def discover_mysensors_platform(
-    hass: HomeAssistant, gateway_id: GatewayId, platform: str, new_devices: List[DevId]
-) -> None:
+def discover_mysensors_platform(hass: HomeAssistant, gateway_id: GatewayId,
+                                platform: str,
+                                new_devices: List[DevId]) -> None:
     """Discover a MySensors platform."""
-    _LOGGER.debug("Discovering platform %s with devIds: %s", platform, new_devices)
+    _LOGGER.debug("Discovering platform %s with devIds: %s", platform,
+                  new_devices)
     async_dispatcher_send(
         hass,
         MYSENSORS_DISCOVERY.format(gateway_id, platform),
@@ -73,70 +74,63 @@ def discover_mysensors_platform(
     )
 
 
-def default_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-) -> vol.Schema:
+def default_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                   value_type_name: ValueType) -> vol.Schema:
     """Return a default validation schema for value types."""
     schema = {value_type_name: cv.string}
     return get_child_schema(gateway, child, value_type_name, schema)
 
 
 @SCHEMAS.register(("light", "V_DIMMER"))
-def light_dimmer_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-) -> vol.Schema:
+def light_dimmer_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                        value_type_name: ValueType) -> vol.Schema:
     """Return a validation schema for V_DIMMER."""
     schema = {"V_DIMMER": cv.string, "V_LIGHT": cv.string}
     return get_child_schema(gateway, child, value_type_name, schema)
 
 
 @SCHEMAS.register(("light", "V_PERCENTAGE"))
-def light_percentage_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-) -> vol.Schema:
+def light_percentage_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                            value_type_name: ValueType) -> vol.Schema:
     """Return a validation schema for V_PERCENTAGE."""
     schema = {"V_PERCENTAGE": cv.string, "V_STATUS": cv.string}
     return get_child_schema(gateway, child, value_type_name, schema)
 
 
 @SCHEMAS.register(("light", "V_RGB"))
-def light_rgb_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-) -> vol.Schema:
+def light_rgb_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                     value_type_name: ValueType) -> vol.Schema:
     """Return a validation schema for V_RGB."""
     schema = {"V_RGB": cv.string, "V_STATUS": cv.string}
     return get_child_schema(gateway, child, value_type_name, schema)
 
 
 @SCHEMAS.register(("light", "V_RGBW"))
-def light_rgbw_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-) -> vol.Schema:
+def light_rgbw_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                      value_type_name: ValueType) -> vol.Schema:
     """Return a validation schema for V_RGBW."""
     schema = {"V_RGBW": cv.string, "V_STATUS": cv.string}
     return get_child_schema(gateway, child, value_type_name, schema)
 
 
 @SCHEMAS.register(("switch", "V_IR_SEND"))
-def switch_ir_send_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-) -> vol.Schema:
+def switch_ir_send_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                          value_type_name: ValueType) -> vol.Schema:
     """Return a validation schema for V_IR_SEND."""
     schema = {"V_IR_SEND": cv.string, "V_LIGHT": cv.string}
     return get_child_schema(gateway, child, value_type_name, schema)
 
 
-def get_child_schema(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType, schema
-) -> vol.Schema:
+def get_child_schema(gateway: BaseAsyncGateway, child: ChildSensor,
+                     value_type_name: ValueType, schema) -> vol.Schema:
     """Return a child schema."""
     set_req = gateway.const.SetReq
     child_schema = child.get_schema(gateway.protocol_version)
     schema = child_schema.extend(
         {
-            vol.Required(
-                set_req[name].value, msg=invalid_msg(gateway, child, name)
-            ): child_schema.schema.get(set_req[name].value, valid)
+            vol.Required(set_req[name].value,
+                         msg=invalid_msg(gateway, child, name)):
+            child_schema.schema.get(set_req[name].value, valid)
             for name, valid in schema.items()
         },
         extra=vol.ALLOW_EXTRA,
@@ -144,9 +138,8 @@ def get_child_schema(
     return schema
 
 
-def invalid_msg(
-    gateway: BaseAsyncGateway, child: ChildSensor, value_type_name: ValueType
-):
+def invalid_msg(gateway: BaseAsyncGateway, child: ChildSensor,
+                value_type_name: ValueType):
     """Return a message for an invalid child during schema validation."""
     pres = gateway.const.Presentation
     set_req = gateway.const.SetReq
@@ -155,12 +148,14 @@ def invalid_msg(
     )
 
 
-def validate_set_msg(gateway_id: GatewayId, msg: Message) -> Dict[str, List[DevId]]:
+def validate_set_msg(gateway_id: GatewayId,
+                     msg: Message) -> Dict[str, List[DevId]]:
     """Validate a set message."""
     if not validate_node(msg.gateway, msg.node_id):
         return {}
     child = msg.gateway.sensors[msg.node_id].children[msg.child_id]
-    return validate_child(gateway_id, msg.gateway, msg.node_id, child, msg.sub_type)
+    return validate_child(gateway_id, msg.gateway, msg.node_id, child,
+                          msg.sub_type)
 
 
 def validate_node(gateway: BaseAsyncGateway, node_id: int) -> bool:
@@ -183,11 +178,11 @@ def validate_child(
     pres: IntEnum = gateway.const.Presentation
     set_req: IntEnum = gateway.const.SetReq
     child_type_name: Optional[SensorType] = next(
-        (member.name for member in pres if member.value == child.type), None
-    )
+        (member.name for member in pres if member.value == child.type), None)
     value_types: Set[int] = {value_type} if value_type else {*child.values}
     value_type_names: Set[ValueType] = {
-        member.name for member in set_req if member.value in value_types
+        member.name
+        for member in set_req if member.value in value_types
     }
     platforms: List[str] = TYPE_TO_PLATFORMS.get(child_type_name, [])
     if not platforms:
@@ -195,13 +190,13 @@ def validate_child(
         return validated
 
     for platform in platforms:
-        platform_v_names: Set[ValueType] = FLAT_PLATFORM_TYPES[
-            platform, child_type_name
-        ]
+        platform_v_names: Set[ValueType] = FLAT_PLATFORM_TYPES[platform,
+                                                               child_type_name]
         v_names: Set[ValueType] = platform_v_names & value_type_names
         if not v_names:
             child_value_names: Set[ValueType] = {
-                member.name for member in set_req if member.value in child.values
+                member.name
+                for member in set_req if member.value in child.values
             }
             v_names: Set[ValueType] = platform_v_names & child_value_names
 

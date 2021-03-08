@@ -28,7 +28,8 @@ from tests.common import MockConfigEntry
 @pytest.fixture(name="connect_timeout")
 def connect_timeout_fixture():
     """Mock the connect timeout."""
-    with patch("homeassistant.components.zwave_js.CONNECT_TIMEOUT", new=0) as timeout:
+    with patch("homeassistant.components.zwave_js.CONNECT_TIMEOUT",
+               new=0) as timeout:
         yield timeout
 
 
@@ -63,10 +64,11 @@ async def test_initialized_timeout(hass, client, connect_timeout):
     assert entry.state == ENTRY_STATE_SETUP_RETRY
 
 
-@pytest.mark.parametrize("error", [BaseZwaveJSServerError("Boom"), Exception("Boom")])
+@pytest.mark.parametrize("error",
+                         [BaseZwaveJSServerError("Boom"),
+                          Exception("Boom")])
 async def test_listen_failure(hass, client, error):
     """Test we handle errors during client listen."""
-
     async def listen(driver_ready):
         """Mock the client listen method."""
         # Set the connect side effect to stop an endless loop on reload.
@@ -83,9 +85,8 @@ async def test_listen_failure(hass, client, error):
     assert entry.state == ENTRY_STATE_SETUP_RETRY
 
 
-async def test_on_node_added_ready(
-    hass, multisensor_6_state, client, integration, device_registry
-):
+async def test_on_node_added_ready(hass, multisensor_6_state, client,
+                                   integration, device_registry):
     """Test we handle a ready node added event."""
     node = Node(client, multisensor_6_state)
     event = {"node": node}
@@ -95,8 +96,7 @@ async def test_on_node_added_ready(
 
     assert not state  # entity and device not yet added
     assert not device_registry.async_get_device(
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
     client.driver.controller.emit("node added", event)
     await hass.async_block_till_done()
@@ -106,13 +106,11 @@ async def test_on_node_added_ready(
     assert state  # entity and device added
     assert state.state != STATE_UNAVAILABLE
     assert device_registry.async_get_device(
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
 
-async def test_unique_id_migration_dupes(
-    hass, multisensor_6_state, client, integration
-):
+async def test_unique_id_migration_dupes(hass, multisensor_6_state, client,
+                                         integration):
     """Test we remove an entity when ."""
     ent_reg = entity_registry.async_get(hass)
 
@@ -120,8 +118,7 @@ async def test_unique_id_migration_dupes(
 
     # Create entity RegistryEntry using old unique ID format
     old_unique_id_1 = (
-        f"{client.driver.controller.home_id}.52.52-49-00-Air temperature-00"
-    )
+        f"{client.driver.controller.home_id}.52.52-49-00-Air temperature-00")
     entity_entry = ent_reg.async_get_or_create(
         "sensor",
         DOMAIN,
@@ -135,8 +132,7 @@ async def test_unique_id_migration_dupes(
 
     # Create entity RegistryEntry using b0 unique ID format
     old_unique_id_2 = (
-        f"{client.driver.controller.home_id}.52.52-49-0-Air temperature-00-00"
-    )
+        f"{client.driver.controller.home_id}.52.52-49-0-Air temperature-00-00")
     entity_entry = ent_reg.async_get_or_create(
         "sensor",
         DOMAIN,
@@ -163,7 +159,8 @@ async def test_unique_id_migration_dupes(
     assert ent_reg.async_get(f"{AIR_TEMPERATURE_SENSOR}_1") is None
 
 
-async def test_unique_id_migration_v1(hass, multisensor_6_state, client, integration):
+async def test_unique_id_migration_v1(hass, multisensor_6_state, client,
+                                      integration):
     """Test unique ID is migrated from old format to new (version 1)."""
     ent_reg = entity_registry.async_get(hass)
 
@@ -196,7 +193,8 @@ async def test_unique_id_migration_v1(hass, multisensor_6_state, client, integra
     assert entity_entry.unique_id == new_unique_id
 
 
-async def test_unique_id_migration_v2(hass, multisensor_6_state, client, integration):
+async def test_unique_id_migration_v2(hass, multisensor_6_state, client,
+                                      integration):
     """Test unique ID is migrated from old format to new (version 2)."""
     ent_reg = entity_registry.async_get(hass)
     # Migrate version 2
@@ -229,7 +227,8 @@ async def test_unique_id_migration_v2(hass, multisensor_6_state, client, integra
     assert entity_entry.unique_id == new_unique_id
 
 
-async def test_unique_id_migration_v3(hass, multisensor_6_state, client, integration):
+async def test_unique_id_migration_v3(hass, multisensor_6_state, client,
+                                      integration):
     """Test unique ID is migrated from old format to new (version 3)."""
     ent_reg = entity_registry.async_get(hass)
     # Migrate version 2
@@ -262,9 +261,9 @@ async def test_unique_id_migration_v3(hass, multisensor_6_state, client, integra
     assert entity_entry.unique_id == new_unique_id
 
 
-async def test_unique_id_migration_property_key_v1(
-    hass, hank_binary_switch_state, client, integration
-):
+async def test_unique_id_migration_property_key_v1(hass,
+                                                   hank_binary_switch_state,
+                                                   client, integration):
     """Test unique ID with property key is migrated from old format to new (version 1)."""
     ent_reg = entity_registry.async_get(hass)
 
@@ -297,9 +296,9 @@ async def test_unique_id_migration_property_key_v1(
     assert entity_entry.unique_id == new_unique_id
 
 
-async def test_unique_id_migration_property_key_v2(
-    hass, hank_binary_switch_state, client, integration
-):
+async def test_unique_id_migration_property_key_v2(hass,
+                                                   hank_binary_switch_state,
+                                                   client, integration):
     """Test unique ID with property key is migrated from old format to new (version 2)."""
     ent_reg = entity_registry.async_get(hass)
 
@@ -334,9 +333,9 @@ async def test_unique_id_migration_property_key_v2(
     assert entity_entry.unique_id == new_unique_id
 
 
-async def test_unique_id_migration_property_key_v3(
-    hass, hank_binary_switch_state, client, integration
-):
+async def test_unique_id_migration_property_key_v3(hass,
+                                                   hank_binary_switch_state,
+                                                   client, integration):
     """Test unique ID with property key is migrated from old format to new (version 3)."""
     ent_reg = entity_registry.async_get(hass)
 
@@ -370,8 +369,7 @@ async def test_unique_id_migration_property_key_v3(
 
 
 async def test_unique_id_migration_notification_binary_sensor(
-    hass, multisensor_6_state, client, integration
-):
+        hass, multisensor_6_state, client, integration):
     """Test unique ID is migrated from old format to new for a notification binary sensor."""
     ent_reg = entity_registry.async_get(hass)
 
@@ -403,11 +401,11 @@ async def test_unique_id_migration_notification_binary_sensor(
     assert entity_entry.unique_id == new_unique_id
 
 
-async def test_on_node_added_not_ready(
-    hass, multisensor_6_state, client, integration, device_registry
-):
+async def test_on_node_added_not_ready(hass, multisensor_6_state, client,
+                                       integration, device_registry):
     """Test we handle a non ready node added event."""
-    node_data = deepcopy(multisensor_6_state)  # Copy to allow modification in tests.
+    node_data = deepcopy(
+        multisensor_6_state)  # Copy to allow modification in tests.
     node = Node(client, node_data)
     node.data["ready"] = False
     event = {"node": node}
@@ -417,8 +415,7 @@ async def test_on_node_added_not_ready(
 
     assert not state  # entity and device not yet added
     assert not device_registry.async_get_device(
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
     client.driver.controller.emit("node added", event)
     await hass.async_block_till_done()
@@ -427,8 +424,7 @@ async def test_on_node_added_not_ready(
 
     assert not state  # entity not yet added but device added in registry
     assert device_registry.async_get_device(
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
     node.data["ready"] = True
     node.emit("ready", event)
@@ -440,9 +436,8 @@ async def test_on_node_added_not_ready(
     assert state.state != STATE_UNAVAILABLE
 
 
-async def test_existing_node_ready(
-    hass, client, multisensor_6, integration, device_registry
-):
+async def test_existing_node_ready(hass, client, multisensor_6, integration,
+                                   device_registry):
     """Test we handle a ready node that exists during integration setup."""
     node = multisensor_6
     air_temperature_device_id = f"{client.driver.controller.home_id}-{node.node_id}"
@@ -452,8 +447,7 @@ async def test_existing_node_ready(
     assert state  # entity and device added
     assert state.state != STATE_UNAVAILABLE
     assert device_registry.async_get_device(
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
 
 async def test_null_name(hass, client, null_name_check, integration):
@@ -462,7 +456,8 @@ async def test_null_name(hass, client, null_name_check, integration):
     assert hass.states.get(f"switch.node_{node.node_id}")
 
 
-async def test_existing_node_not_ready(hass, client, multisensor_6, device_registry):
+async def test_existing_node_not_ready(hass, client, multisensor_6,
+                                       device_registry):
     """Test we handle a non ready node that exists during integration setup."""
     node = multisensor_6
     node.data = deepcopy(node.data)  # Copy to allow modification in tests.
@@ -479,8 +474,7 @@ async def test_existing_node_not_ready(hass, client, multisensor_6, device_regis
 
     assert not state  # entity not yet added
     assert device_registry.async_get_device(  # device should be added
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
     node.data["ready"] = True
     node.emit("ready", event)
@@ -491,13 +485,11 @@ async def test_existing_node_not_ready(hass, client, multisensor_6, device_regis
     assert state  # entity and device added
     assert state.state != STATE_UNAVAILABLE
     assert device_registry.async_get_device(
-        identifiers={(DOMAIN, air_temperature_device_id)}
-    )
+        identifiers={(DOMAIN, air_temperature_device_id)})
 
 
-async def test_start_addon(
-    hass, addon_installed, install_addon, addon_options, set_addon_options, start_addon
-):
+async def test_start_addon(hass, addon_installed, install_addon, addon_options,
+                           set_addon_options, start_addon):
     """Test start the Z-Wave JS add-on during entry setup."""
     device = "/test"
     network_key = "abc123"
@@ -509,7 +501,11 @@ async def test_start_addon(
         domain=DOMAIN,
         title="Z-Wave JS",
         connection_class=CONN_CLASS_LOCAL_PUSH,
-        data={"use_addon": True, "usb_path": device, "network_key": network_key},
+        data={
+            "use_addon": True,
+            "usb_path": device,
+            "network_key": network_key
+        },
     )
     entry.add_to_hass(hass)
 
@@ -519,16 +515,14 @@ async def test_start_addon(
     assert entry.state == ENTRY_STATE_SETUP_RETRY
     assert install_addon.call_count == 0
     assert set_addon_options.call_count == 1
-    assert set_addon_options.call_args == call(
-        hass, "core_zwave_js", {"options": addon_options}
-    )
+    assert set_addon_options.call_args == call(hass, "core_zwave_js",
+                                               {"options": addon_options})
     assert start_addon.call_count == 1
     assert start_addon.call_args == call(hass, "core_zwave_js")
 
 
-async def test_install_addon(
-    hass, addon_installed, install_addon, addon_options, set_addon_options, start_addon
-):
+async def test_install_addon(hass, addon_installed, install_addon,
+                             addon_options, set_addon_options, start_addon):
     """Test install and start the Z-Wave JS add-on during entry setup."""
     addon_installed.return_value["version"] = None
     device = "/test"
@@ -541,7 +535,11 @@ async def test_install_addon(
         domain=DOMAIN,
         title="Z-Wave JS",
         connection_class=CONN_CLASS_LOCAL_PUSH,
-        data={"use_addon": True, "usb_path": device, "network_key": network_key},
+        data={
+            "use_addon": True,
+            "usb_path": device,
+            "network_key": network_key
+        },
     )
     entry.add_to_hass(hass)
 
@@ -552,9 +550,8 @@ async def test_install_addon(
     assert install_addon.call_count == 1
     assert install_addon.call_args == call(hass, "core_zwave_js")
     assert set_addon_options.call_count == 1
-    assert set_addon_options.call_args == call(
-        hass, "core_zwave_js", {"options": addon_options}
-    )
+    assert set_addon_options.call_args == call(hass, "core_zwave_js",
+                                               {"options": addon_options})
     assert start_addon.call_count == 1
     assert start_addon.call_args == call(hass, "core_zwave_js")
 
@@ -575,7 +572,11 @@ async def test_addon_info_failure(
         domain=DOMAIN,
         title="Z-Wave JS",
         connection_class=CONN_CLASS_LOCAL_PUSH,
-        data={"use_addon": True, "usb_path": device, "network_key": network_key},
+        data={
+            "use_addon": True,
+            "usb_path": device,
+            "network_key": network_key
+        },
     )
     entry.add_to_hass(hass)
 
@@ -681,7 +682,8 @@ async def test_stop_addon(
 
     assert entry.state == ENTRY_STATE_LOADED
 
-    await hass.config_entries.async_set_disabled_by(entry.entry_id, DISABLED_USER)
+    await hass.config_entries.async_set_disabled_by(entry.entry_id,
+                                                    DISABLED_USER)
     await hass.async_block_till_done()
 
     assert entry.state == entry_state
@@ -689,9 +691,8 @@ async def test_stop_addon(
     assert stop_addon.call_args == call(hass, "core_zwave_js")
 
 
-async def test_remove_entry(
-    hass, addon_installed, stop_addon, create_shapshot, uninstall_addon, caplog
-):
+async def test_remove_entry(hass, addon_installed, stop_addon, create_shapshot,
+                            uninstall_addon, caplog):
     """Test remove the config entry."""
     # test successful remove without created add-on
     entry = MockConfigEntry(
@@ -726,7 +727,10 @@ async def test_remove_entry(
     assert create_shapshot.call_count == 1
     assert create_shapshot.call_args == call(
         hass,
-        {"name": "addon_core_zwave_js_1.0", "addons": ["core_zwave_js"]},
+        {
+            "name": "addon_core_zwave_js_1.0",
+            "addons": ["core_zwave_js"]
+        },
         partial=True,
     )
     assert uninstall_addon.call_count == 1
@@ -768,7 +772,10 @@ async def test_remove_entry(
     assert create_shapshot.call_count == 1
     assert create_shapshot.call_args == call(
         hass,
-        {"name": "addon_core_zwave_js_1.0", "addons": ["core_zwave_js"]},
+        {
+            "name": "addon_core_zwave_js_1.0",
+            "addons": ["core_zwave_js"]
+        },
         partial=True,
     )
     assert uninstall_addon.call_count == 0
@@ -792,7 +799,10 @@ async def test_remove_entry(
     assert create_shapshot.call_count == 1
     assert create_shapshot.call_args == call(
         hass,
-        {"name": "addon_core_zwave_js_1.0", "addons": ["core_zwave_js"]},
+        {
+            "name": "addon_core_zwave_js_1.0",
+            "addons": ["core_zwave_js"]
+        },
         partial=True,
     )
     assert uninstall_addon.call_count == 1
@@ -812,15 +822,13 @@ async def test_removed_device(hass, client, multiple_devices, integration):
     # Make sure there are the same number of devices
     dev_reg = await device_registry.async_get_registry(hass)
     device_entries = device_registry.async_entries_for_config_entry(
-        dev_reg, integration.entry_id
-    )
+        dev_reg, integration.entry_id)
     assert len(device_entries) == 2
 
     # Check how many entities there are
     ent_reg = await entity_registry.async_get_registry(hass)
     entity_entries = entity_registry.async_entries_for_config_entry(
-        ent_reg, integration.entry_id
-    )
+        ent_reg, integration.entry_id)
     assert len(entity_entries) == 24
 
     # Remove a node and reload the entry
@@ -831,12 +839,10 @@ async def test_removed_device(hass, client, multiple_devices, integration):
     # Assert that the node and all of it's entities were removed from the device and
     # entity registry
     device_entries = device_registry.async_entries_for_config_entry(
-        dev_reg, integration.entry_id
-    )
+        dev_reg, integration.entry_id)
     assert len(device_entries) == 1
     entity_entries = entity_registry.async_entries_for_config_entry(
-        ent_reg, integration.entry_id
-    )
+        ent_reg, integration.entry_id)
     assert len(entity_entries) == 15
     assert dev_reg.async_get_device({get_device_id(client, old_node)}) is None
 

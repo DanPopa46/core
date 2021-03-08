@@ -69,13 +69,13 @@ DEFAULT_VERSION = "1.4"
 
 def has_all_unique_files(value):
     """Validate that all persistence files are unique and set if any is set."""
-    persistence_files = [gateway.get(CONF_PERSISTENCE_FILE) for gateway in value]
-    if None in persistence_files and any(
-        name is not None for name in persistence_files
-    ):
+    persistence_files = [
+        gateway.get(CONF_PERSISTENCE_FILE) for gateway in value
+    ]
+    if None in persistence_files and any(name is not None
+                                         for name in persistence_files):
         raise vol.Invalid(
-            "persistence file name of all devices must be set if any is set"
-        )
+            "persistence file name of all devices must be set if any is set")
     if not all(name is None for name in persistence_files):
         schema = vol.Schema(vol.Unique())
         schema(persistence_files)
@@ -91,7 +91,6 @@ def is_persistence_file(value):
 
 def deprecated(key):
     """Mark key as deprecated in configuration."""
-
     def validator(config):
         """Check if key is in config, log warning and remove key."""
         if key not in config:
@@ -109,43 +108,54 @@ def deprecated(key):
     return validator
 
 
-NODE_SCHEMA = vol.Schema({cv.positive_int: {vol.Required(CONF_NODE_NAME): cv.string}})
+NODE_SCHEMA = vol.Schema(
+    {cv.positive_int: {
+        vol.Required(CONF_NODE_NAME): cv.string
+    }})
 
 GATEWAY_SCHEMA = vol.Schema(
     vol.All(
         deprecated(CONF_NODES),
         {
-            vol.Required(CONF_DEVICE): cv.string,
-            vol.Optional(CONF_PERSISTENCE_FILE): vol.All(
-                cv.string, is_persistence_file
-            ),
-            vol.Optional(CONF_BAUD_RATE, default=DEFAULT_BAUD_RATE): cv.positive_int,
-            vol.Optional(CONF_TCP_PORT, default=DEFAULT_TCP_PORT): cv.port,
-            vol.Optional(CONF_TOPIC_IN_PREFIX): valid_subscribe_topic,
-            vol.Optional(CONF_TOPIC_OUT_PREFIX): valid_publish_topic,
-            vol.Optional(CONF_NODES, default={}): NODE_SCHEMA,
+            vol.Required(CONF_DEVICE):
+            cv.string,
+            vol.Optional(CONF_PERSISTENCE_FILE):
+            vol.All(cv.string, is_persistence_file),
+            vol.Optional(CONF_BAUD_RATE, default=DEFAULT_BAUD_RATE):
+            cv.positive_int,
+            vol.Optional(CONF_TCP_PORT, default=DEFAULT_TCP_PORT):
+            cv.port,
+            vol.Optional(CONF_TOPIC_IN_PREFIX):
+            valid_subscribe_topic,
+            vol.Optional(CONF_TOPIC_OUT_PREFIX):
+            valid_publish_topic,
+            vol.Optional(CONF_NODES, default={}):
+            NODE_SCHEMA,
         },
-    )
-)
+    ))
 
 CONFIG_SCHEMA = vol.Schema(
     {
-        DOMAIN: vol.Schema(
+        DOMAIN:
+        vol.Schema(
             vol.All(
                 deprecated(CONF_DEBUG),
                 deprecated(CONF_OPTIMISTIC),
                 deprecated(CONF_PERSISTENCE),
                 {
-                    vol.Required(CONF_GATEWAYS): vol.All(
-                        cv.ensure_list, has_all_unique_files, [GATEWAY_SCHEMA]
-                    ),
-                    vol.Optional(CONF_RETAIN, default=True): cv.boolean,
-                    vol.Optional(CONF_VERSION, default=DEFAULT_VERSION): cv.string,
-                    vol.Optional(CONF_OPTIMISTIC, default=False): cv.boolean,
-                    vol.Optional(CONF_PERSISTENCE, default=True): cv.boolean,
+                    vol.Required(CONF_GATEWAYS):
+                    vol.All(cv.ensure_list, has_all_unique_files,
+                            [GATEWAY_SCHEMA]),
+                    vol.Optional(CONF_RETAIN, default=True):
+                    cv.boolean,
+                    vol.Optional(CONF_VERSION, default=DEFAULT_VERSION):
+                    cv.string,
+                    vol.Optional(CONF_OPTIMISTIC, default=False):
+                    cv.boolean,
+                    vol.Optional(CONF_PERSISTENCE, default=True):
+                    cv.boolean,
                 },
-            )
-        )
+            ))
     },
     extra=vol.ALLOW_EXTRA,
 )
@@ -170,13 +180,11 @@ async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
             CONF_VERSION: config[CONF_VERSION],
             CONF_PERSISTENCE_FILE: gw.get(CONF_PERSISTENCE_FILE)
             # nodes config ignored at this time. renaming nodes can now be done from the frontend.
-        }
-        for gw in config[CONF_GATEWAYS]
+        } for gw in config[CONF_GATEWAYS]
     ]
-    user_inputs = [
-        {k: v for k, v in userinput.items() if v is not None}
-        for userinput in user_inputs
-    ]
+    user_inputs = [{k: v
+                    for k, v in userinput.items() if v is not None}
+                   for userinput in user_inputs]
 
     # there is an actual configuration in configuration.yaml, so we have to process it
     for user_input in user_inputs:
@@ -185,13 +193,13 @@ async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
                 DOMAIN,
                 context={"source": config_entries.SOURCE_IMPORT},
                 data=user_input,
-            )
-        )
+            ))
 
     return True
 
 
-async def async_setup_entry(hass: HomeAssistantType, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistantType,
+                            entry: ConfigEntry) -> bool:
     """Set up an instance of the MySensors integration.
 
     Every instance has a connection to exactly one Gateway.
@@ -230,12 +238,10 @@ async def async_setup_entry(hass: HomeAssistantType, entry: ConfigEntry) -> bool
         )
 
     async def finish() -> None:
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_setup(entry, platform)
-                for platform in PLATFORMS_WITH_ENTRY_SUPPORT
-            ]
-        )
+        await asyncio.gather(*[
+            hass.config_entries.async_forward_entry_setup(entry, platform)
+            for platform in PLATFORMS_WITH_ENTRY_SUPPORT
+        ])
         await finish_setup(hass, entry, gateway)
 
     hass.async_create_task(finish())
@@ -243,19 +249,16 @@ async def async_setup_entry(hass: HomeAssistantType, entry: ConfigEntry) -> bool
     return True
 
 
-async def async_unload_entry(hass: HomeAssistantType, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistantType,
+                             entry: ConfigEntry) -> bool:
     """Remove an instance of the MySensors integration."""
 
     gateway = get_mysensors_gateway(hass, entry.entry_id)
 
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(entry, platform)
-                for platform in PLATFORMS_WITH_ENTRY_SUPPORT
-            ]
-        )
-    )
+    unload_ok = all(await asyncio.gather(*[
+        hass.config_entries.async_forward_entry_unload(entry, platform)
+        for platform in PLATFORMS_WITH_ENTRY_SUPPORT
+    ]))
     if not unload_ok:
         return False
 
@@ -277,10 +280,10 @@ def setup_mysensors_platform(
     hass: HomeAssistant,
     domain: str,  # hass platform name
     discovery_info: Dict[str, List[DevId]],
-    device_class: Union[Type[MySensorsDevice], Dict[SensorType, Type[MySensorsEntity]]],
+    device_class: Union[Type[MySensorsDevice], Dict[SensorType,
+                                                    Type[MySensorsEntity]]],
     device_args: Optional[
-        Tuple
-    ] = None,  # extra arguments that will be given to the entity constructor
+        Tuple] = None,  # extra arguments that will be given to the entity constructor
     async_add_entities: Optional[Callable] = None,
 ) -> Optional[List[MySensorsDevice]]:
     """Set up a MySensors platform.
@@ -295,7 +298,8 @@ def setup_mysensors_platform(
     new_devices: List[MySensorsDevice] = []
     new_dev_ids: List[DevId] = discovery_info[ATTR_DEVICES]
     for dev_id in new_dev_ids:
-        devices: Dict[DevId, MySensorsDevice] = get_mysensors_devices(hass, domain)
+        devices: Dict[DevId,
+                      MySensorsDevice] = get_mysensors_devices(hass, domain)
         if dev_id in devices:
             _LOGGER.debug(
                 "Skipping setup of %s for platform %s as it already exists",
@@ -304,7 +308,8 @@ def setup_mysensors_platform(
             )
             continue
         gateway_id, node_id, child_id, value_type = dev_id
-        gateway: Optional[BaseAsyncGateway] = get_mysensors_gateway(hass, gateway_id)
+        gateway: Optional[BaseAsyncGateway] = get_mysensors_gateway(
+            hass, gateway_id)
         if not gateway:
             _LOGGER.warning("Skipping setup of %s, no gateway found", dev_id)
             continue
@@ -314,7 +319,8 @@ def setup_mysensors_platform(
             s_type = gateway.const.Presentation(child.type).name
             device_class_copy = device_class[s_type]
 
-        args_copy = (*device_args, gateway_id, gateway, node_id, child_id, value_type)
+        args_copy = (*device_args, gateway_id, gateway, node_id, child_id,
+                     value_type)
         devices[dev_id] = device_class_copy(*args_copy)
         new_devices.append(devices[dev_id])
     if new_devices:

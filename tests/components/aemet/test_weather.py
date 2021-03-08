@@ -27,9 +27,9 @@ async def test_aemet_weather(hass):
     """Test states of the weather."""
 
     now = dt_util.parse_datetime("2021-01-09 12:00:00+00:00")
-    with patch("homeassistant.util.dt.now", return_value=now), patch(
-        "homeassistant.util.dt.utcnow", return_value=now
-    ):
+    with patch("homeassistant.util.dt.now",
+               return_value=now), patch("homeassistant.util.dt.utcnow",
+                                        return_value=now):
         await async_init_integration(hass)
 
     state = hass.states.get("weather.aemet_daily")
@@ -47,10 +47,8 @@ async def test_aemet_weather(hass):
     assert forecast.get(ATTR_FORECAST_PRECIPITATION_PROBABILITY) == 30
     assert forecast.get(ATTR_FORECAST_TEMP) == 4
     assert forecast.get(ATTR_FORECAST_TEMP_LOW) == -4
-    assert (
-        forecast.get(ATTR_FORECAST_TIME)
-        == dt_util.parse_datetime("2021-01-10 00:00:00+00:00").isoformat()
-    )
+    assert (forecast.get(ATTR_FORECAST_TIME) == dt_util.parse_datetime(
+        "2021-01-10 00:00:00+00:00").isoformat())
     assert forecast.get(ATTR_FORECAST_WIND_BEARING) == 45.0
     assert forecast.get(ATTR_FORECAST_WIND_SPEED) == 20
 

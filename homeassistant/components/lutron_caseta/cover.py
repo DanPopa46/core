@@ -38,7 +38,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaCover(LutronCasetaDevice, CoverEntity):
     """Representation of a Lutron shade."""
-
     @property
     def supported_features(self):
         """Flag supported features."""

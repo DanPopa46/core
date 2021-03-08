@@ -12,9 +12,9 @@ async def test_aemet_forecast_create_sensors(hass):
     """Test creation of forecast sensors."""
 
     now = dt_util.parse_datetime("2021-01-09 12:00:00+00:00")
-    with patch("homeassistant.util.dt.now", return_value=now), patch(
-        "homeassistant.util.dt.utcnow", return_value=now
-    ):
+    with patch("homeassistant.util.dt.now",
+               return_value=now), patch("homeassistant.util.dt.utcnow",
+                                        return_value=now):
         await async_init_integration(hass)
 
     state = hass.states.get("sensor.aemet_daily_forecast_condition")
@@ -23,7 +23,8 @@ async def test_aemet_forecast_create_sensors(hass):
     state = hass.states.get("sensor.aemet_daily_forecast_precipitation")
     assert state.state == STATE_UNKNOWN
 
-    state = hass.states.get("sensor.aemet_daily_forecast_precipitation_probability")
+    state = hass.states.get(
+        "sensor.aemet_daily_forecast_precipitation_probability")
     assert state.state == "30"
 
     state = hass.states.get("sensor.aemet_daily_forecast_temperature")
@@ -33,9 +34,8 @@ async def test_aemet_forecast_create_sensors(hass):
     assert state.state == "-4"
 
     state = hass.states.get("sensor.aemet_daily_forecast_time")
-    assert (
-        state.state == dt_util.parse_datetime("2021-01-10 00:00:00+00:00").isoformat()
-    )
+    assert (state.state == dt_util.parse_datetime(
+        "2021-01-10 00:00:00+00:00").isoformat())
 
     state = hass.states.get("sensor.aemet_daily_forecast_wind_bearing")
     assert state.state == "45.0"
@@ -49,7 +49,8 @@ async def test_aemet_forecast_create_sensors(hass):
     state = hass.states.get("sensor.aemet_hourly_forecast_precipitation")
     assert state is None
 
-    state = hass.states.get("sensor.aemet_hourly_forecast_precipitation_probability")
+    state = hass.states.get(
+        "sensor.aemet_hourly_forecast_precipitation_probability")
     assert state is None
 
     state = hass.states.get("sensor.aemet_hourly_forecast_temperature")
@@ -72,9 +73,9 @@ async def test_aemet_weather_create_sensors(hass):
     """Test creation of weather sensors."""
 
     now = dt_util.parse_datetime("2021-01-09 12:00:00+00:00")
-    with patch("homeassistant.util.dt.now", return_value=now), patch(
-        "homeassistant.util.dt.utcnow", return_value=now
-    ):
+    with patch("homeassistant.util.dt.now",
+               return_value=now), patch("homeassistant.util.dt.utcnow",
+                                        return_value=now):
         await async_init_integration(hass)
 
     state = hass.states.get("sensor.aemet_condition")

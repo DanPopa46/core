@@ -28,8 +28,8 @@ def addon_info_side_effect_fixture():
 def mock_addon_info(addon_info_side_effect):
     """Mock Supervisor add-on info."""
     with patch(
-        "homeassistant.components.zwave_js.addon.async_get_addon_info",
-        side_effect=addon_info_side_effect,
+            "homeassistant.components.zwave_js.addon.async_get_addon_info",
+            side_effect=addon_info_side_effect,
     ) as addon_info:
         addon_info.return_value = {}
         yield addon_info
@@ -67,8 +67,8 @@ def set_addon_options_side_effect_fixture():
 def mock_set_addon_options(set_addon_options_side_effect):
     """Mock set add-on options."""
     with patch(
-        "homeassistant.components.zwave_js.addon.async_set_addon_options",
-        side_effect=set_addon_options_side_effect,
+            "homeassistant.components.zwave_js.addon.async_set_addon_options",
+            side_effect=set_addon_options_side_effect,
     ) as set_options:
         yield set_options
 
@@ -76,18 +76,16 @@ def mock_set_addon_options(set_addon_options_side_effect):
 @pytest.fixture(name="install_addon")
 def mock_install_addon():
     """Mock install add-on."""
-    with patch(
-        "homeassistant.components.zwave_js.addon.async_install_addon"
-    ) as install_addon:
+    with patch("homeassistant.components.zwave_js.addon.async_install_addon"
+               ) as install_addon:
         yield install_addon
 
 
 @pytest.fixture(name="update_addon")
 def mock_update_addon():
     """Mock update add-on."""
-    with patch(
-        "homeassistant.components.zwave_js.addon.async_update_addon"
-    ) as update_addon:
+    with patch("homeassistant.components.zwave_js.addon.async_update_addon"
+               ) as update_addon:
         yield update_addon
 
 
@@ -101,8 +99,8 @@ def start_addon_side_effect_fixture():
 def mock_start_addon(start_addon_side_effect):
     """Mock start add-on."""
     with patch(
-        "homeassistant.components.zwave_js.addon.async_start_addon",
-        side_effect=start_addon_side_effect,
+            "homeassistant.components.zwave_js.addon.async_start_addon",
+            side_effect=start_addon_side_effect,
     ) as start_addon:
         yield start_addon
 
@@ -110,27 +108,24 @@ def mock_start_addon(start_addon_side_effect):
 @pytest.fixture(name="stop_addon")
 def stop_addon_fixture():
     """Mock stop add-on."""
-    with patch(
-        "homeassistant.components.zwave_js.addon.async_stop_addon"
-    ) as stop_addon:
+    with patch("homeassistant.components.zwave_js.addon.async_stop_addon"
+               ) as stop_addon:
         yield stop_addon
 
 
 @pytest.fixture(name="uninstall_addon")
 def uninstall_addon_fixture():
     """Mock uninstall add-on."""
-    with patch(
-        "homeassistant.components.zwave_js.addon.async_uninstall_addon"
-    ) as uninstall_addon:
+    with patch("homeassistant.components.zwave_js.addon.async_uninstall_addon"
+               ) as uninstall_addon:
         yield uninstall_addon
 
 
 @pytest.fixture(name="create_shapshot")
 def create_snapshot_fixture():
     """Mock create snapshot."""
-    with patch(
-        "homeassistant.components.zwave_js.addon.async_create_snapshot"
-    ) as create_shapshot:
+    with patch("homeassistant.components.zwave_js.addon.async_create_snapshot"
+               ) as create_shapshot:
         yield create_shapshot
 
 
@@ -199,12 +194,13 @@ def lock_august_asl03_state_fixture():
     return json.loads(load_fixture("zwave_js/lock_august_asl03_state.json"))
 
 
-@pytest.fixture(name="climate_radio_thermostat_ct100_plus_state", scope="session")
+@pytest.fixture(name="climate_radio_thermostat_ct100_plus_state",
+                scope="session")
 def climate_radio_thermostat_ct100_plus_state_fixture():
     """Load the climate radio thermostat ct100 plus node state fixture data."""
     return json.loads(
-        load_fixture("zwave_js/climate_radio_thermostat_ct100_plus_state.json")
-    )
+        load_fixture(
+            "zwave_js/climate_radio_thermostat_ct100_plus_state.json"))
 
 
 @pytest.fixture(
@@ -219,20 +215,21 @@ def climate_radio_thermostat_ct100_plus_different_endpoints_state_fixture():
     return json.loads(
         load_fixture(
             "zwave_js/climate_radio_thermostat_ct100_plus_different_endpoints_state.json"
-        )
-    )
+        ))
 
 
 @pytest.fixture(name="climate_danfoss_lc_13_state", scope="session")
 def climate_danfoss_lc_13_state_fixture():
     """Load the climate Danfoss (LC-13) electronic radiator thermostat node state fixture data."""
-    return json.loads(load_fixture("zwave_js/climate_danfoss_lc_13_state.json"))
+    return json.loads(
+        load_fixture("zwave_js/climate_danfoss_lc_13_state.json"))
 
 
 @pytest.fixture(name="climate_heatit_z_trm3_state", scope="session")
 def climate_heatit_z_trm3_state_fixture():
     """Load the climate HEATIT Z-TRM3 thermostat node state fixture data."""
-    return json.loads(load_fixture("zwave_js/climate_heatit_z_trm3_state.json"))
+    return json.loads(
+        load_fixture("zwave_js/climate_heatit_z_trm3_state.json"))
 
 
 @pytest.fixture(name="nortek_thermostat_state", scope="session")
@@ -256,7 +253,8 @@ def window_cover_state_fixture():
 @pytest.fixture(name="in_wall_smart_fan_control_state", scope="session")
 def in_wall_smart_fan_control_state_fixture():
     """Load the fan node state fixture data."""
-    return json.loads(load_fixture("zwave_js/in_wall_smart_fan_control_state.json"))
+    return json.loads(
+        load_fixture("zwave_js/in_wall_smart_fan_control_state.json"))
 
 
 @pytest.fixture(name="gdc_zw062_state", scope="session")
@@ -286,7 +284,8 @@ def ge_12730_state_fixture():
 @pytest.fixture(name="aeotec_radiator_thermostat_state", scope="session")
 def aeotec_radiator_thermostat_state_fixture():
     """Load the Aeotec Radiator Thermostat node state fixture data."""
-    return json.loads(load_fixture("zwave_js/aeotec_radiator_thermostat_state.json"))
+    return json.loads(
+        load_fixture("zwave_js/aeotec_radiator_thermostat_state.json"))
 
 
 @pytest.fixture(name="inovelli_lzw36_state", scope="session")
@@ -305,9 +304,8 @@ def null_name_check_state_fixture():
 def mock_client_fixture(controller_state, version_state):
     """Mock a client."""
 
-    with patch(
-        "homeassistant.components.zwave_js.ZwaveClient", autospec=True
-    ) as client_class:
+    with patch("homeassistant.components.zwave_js.ZwaveClient",
+               autospec=True) as client_class:
         client = client_class.return_value
 
         async def connect():
@@ -391,22 +389,22 @@ def lock_august_asl03_fixture(client, lock_august_asl03_state):
 
 @pytest.fixture(name="climate_radio_thermostat_ct100_plus")
 def climate_radio_thermostat_ct100_plus_fixture(
-    client, climate_radio_thermostat_ct100_plus_state
-):
+        client, climate_radio_thermostat_ct100_plus_state):
     """Mock a climate radio thermostat ct100 plus node."""
-    node = Node(client, copy.deepcopy(climate_radio_thermostat_ct100_plus_state))
+    node = Node(client,
+                copy.deepcopy(climate_radio_thermostat_ct100_plus_state))
     client.driver.controller.nodes[node.node_id] = node
     return node
 
 
 @pytest.fixture(name="climate_radio_thermostat_ct100_plus_different_endpoints")
 def climate_radio_thermostat_ct100_plus_different_endpoints_fixture(
-    client, climate_radio_thermostat_ct100_plus_different_endpoints_state
-):
+        client, climate_radio_thermostat_ct100_plus_different_endpoints_state):
     """Mock a climate radio thermostat ct100 plus node with values on different endpoints."""
     node = Node(
         client,
-        copy.deepcopy(climate_radio_thermostat_ct100_plus_different_endpoints_state),
+        copy.deepcopy(
+            climate_radio_thermostat_ct100_plus_different_endpoints_state),
     )
     client.driver.controller.nodes[node.node_id] = node
     return node
@@ -445,7 +443,8 @@ def srt321_hrt4_zw_fixture(client, srt321_hrt4_zw_state):
 
 
 @pytest.fixture(name="aeotec_radiator_thermostat")
-def aeotec_radiator_thermostat_fixture(client, aeotec_radiator_thermostat_state):
+def aeotec_radiator_thermostat_fixture(client,
+                                       aeotec_radiator_thermostat_state):
     """Mock a Aeotec thermostat node."""
     node = Node(client, aeotec_radiator_thermostat_state)
     client.driver.controller.nodes[node.node_id] = node
@@ -455,7 +454,8 @@ def aeotec_radiator_thermostat_fixture(client, aeotec_radiator_thermostat_state)
 @pytest.fixture(name="nortek_thermostat_added_event")
 def nortek_thermostat_added_event_fixture(client):
     """Mock a Nortek thermostat node added event."""
-    event_data = json.loads(load_fixture("zwave_js/nortek_thermostat_added_event.json"))
+    event_data = json.loads(
+        load_fixture("zwave_js/nortek_thermostat_added_event.json"))
     event = Event("node added", event_data)
     return event
 
@@ -464,8 +464,7 @@ def nortek_thermostat_added_event_fixture(client):
 def nortek_thermostat_removed_event_fixture(client):
     """Mock a Nortek thermostat node removed event."""
     event_data = json.loads(
-        load_fixture("zwave_js/nortek_thermostat_removed_event.json")
-    )
+        load_fixture("zwave_js/nortek_thermostat_removed_event.json"))
     event = Event("node removed", event_data)
     return event
 
@@ -506,11 +505,11 @@ def null_name_check_fixture(client, null_name_check_state):
 
 
 @pytest.fixture(name="multiple_devices")
-def multiple_devices_fixture(
-    client, climate_radio_thermostat_ct100_plus_state, lock_schlage_be469_state
-):
+def multiple_devices_fixture(client, climate_radio_thermostat_ct100_plus_state,
+                             lock_schlage_be469_state):
     """Mock a client with multiple devices."""
-    node = Node(client, copy.deepcopy(climate_radio_thermostat_ct100_plus_state))
+    node = Node(client,
+                copy.deepcopy(climate_radio_thermostat_ct100_plus_state))
     client.driver.controller.nodes[node.node_id] = node
     node = Node(client, copy.deepcopy(lock_schlage_be469_state))
     client.driver.controller.nodes[node.node_id] = node

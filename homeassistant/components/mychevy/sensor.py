@@ -20,12 +20,12 @@ BATTERY_SENSOR = "batteryLevel"
 
 SENSORS = [
     EVSensorConfig("Mileage", "totalMiles", "miles", "mdi:speedometer"),
-    EVSensorConfig("Electric Range", "electricRange", "miles", "mdi:speedometer"),
+    EVSensorConfig("Electric Range", "electricRange", "miles",
+                   "mdi:speedometer"),
     EVSensorConfig("Charged By", "estimatedFullChargeBy"),
     EVSensorConfig("Charge Mode", "chargeMode"),
-    EVSensorConfig(
-        "Battery Level", BATTERY_SENSOR, PERCENTAGE, "mdi:battery", ["charging"]
-    ),
+    EVSensorConfig("Battery Level", BATTERY_SENSOR, PERCENTAGE, "mdi:battery",
+                   ["charging"]),
 ]
 
 
@@ -57,15 +57,11 @@ class MyChevyStatus(Entity):
         """Register callbacks."""
         self.async_on_remove(
             self.hass.helpers.dispatcher.async_dispatcher_connect(
-                UPDATE_TOPIC, self.success
-            )
-        )
+                UPDATE_TOPIC, self.success))
 
         self.async_on_remove(
             self.hass.helpers.dispatcher.async_dispatcher_connect(
-                ERROR_TOPIC, self.error
-            )
-        )
+                ERROR_TOPIC, self.error))
 
     @callback
     def success(self):
@@ -78,10 +74,8 @@ class MyChevyStatus(Entity):
     @callback
     def error(self):
         """Update state, trigger updates."""
-        _LOGGER.error(
-            "Connection to mychevy website failed. "
-            "This probably means the mychevy to OnStar link is down"
-        )
+        _LOGGER.error("Connection to mychevy website failed. "
+                      "This probably means the mychevy to OnStar link is down")
         self._state = MYCHEVY_ERROR
         self.async_write_ha_state()
 
@@ -113,7 +107,6 @@ class EVSensor(Entity):
     attribute from the car object they are returning. All logic can be
     built with just setting subclass attributes.
     """
-
     def __init__(self, connection, config, car_vid):
         """Initialize sensor with car connection."""
         self._conn = connection
@@ -131,8 +124,7 @@ class EVSensor(Entity):
     async def async_added_to_hass(self):
         """Register callbacks."""
         self.hass.helpers.dispatcher.async_dispatcher_connect(
-            UPDATE_TOPIC, self.async_update_callback
-        )
+            UPDATE_TOPIC, self.async_update_callback)
 
     @property
     def _car(self):

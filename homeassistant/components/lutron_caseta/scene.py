@@ -26,7 +26,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaScene(Scene):
     """Representation of a Lutron Caseta scene."""
-
     def __init__(self, scene, bridge):
         """Initialize the Lutron Caseta scene."""
         self._scene_name = scene["name"]

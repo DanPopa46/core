@@ -39,27 +39,31 @@ DEFAULT_EXPIRE_AFTER = 300
 
 TYPES = ["battery", "humidity", "temperature"]
 
-SENSOR_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_ID): cv.positive_int,
-        vol.Required(CONF_TYPE): vol.In(TYPES),
-        vol.Optional(CONF_EXPIRE_AFTER): cv.positive_int,
-        vol.Optional(CONF_NAME): cv.string,
-    }
-)
+SENSOR_SCHEMA = vol.Schema({
+    vol.Required(CONF_ID): cv.positive_int,
+    vol.Required(CONF_TYPE): vol.In(TYPES),
+    vol.Optional(CONF_EXPIRE_AFTER): cv.positive_int,
+    vol.Optional(CONF_NAME): cv.string,
+})
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_SENSORS): cv.schema_with_slug_keys(SENSOR_SCHEMA),
-        vol.Optional(CONF_BAUD, default=DEFAULT_BAUD): cv.string,
-        vol.Optional(CONF_DATARATE): cv.positive_int,
-        vol.Optional(CONF_DEVICE, default=DEFAULT_DEVICE): cv.string,
-        vol.Optional(CONF_FREQUENCY): cv.positive_int,
-        vol.Optional(CONF_JEELINK_LED): cv.boolean,
-        vol.Optional(CONF_TOGGLE_INTERVAL): cv.positive_int,
-        vol.Optional(CONF_TOGGLE_MASK): cv.positive_int,
-    }
-)
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+    vol.Required(CONF_SENSORS):
+    cv.schema_with_slug_keys(SENSOR_SCHEMA),
+    vol.Optional(CONF_BAUD, default=DEFAULT_BAUD):
+    cv.string,
+    vol.Optional(CONF_DATARATE):
+    cv.positive_int,
+    vol.Optional(CONF_DEVICE, default=DEFAULT_DEVICE):
+    cv.string,
+    vol.Optional(CONF_FREQUENCY):
+    cv.positive_int,
+    vol.Optional(CONF_JEELINK_LED):
+    cv.boolean,
+    vol.Optional(CONF_TOGGLE_INTERVAL):
+    cv.positive_int,
+    vol.Optional(CONF_TOGGLE_MASK):
+    cv.positive_int,
+})
 
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
@@ -78,7 +82,8 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         _LOGGER.warning("Unable to open serial port: %s", exc)
         return False
 
-    hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, lambda event: lacrosse.close())
+    hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP,
+                         lambda event: lacrosse.close())
 
     if CONF_JEELINK_LED in config:
         lacrosse.led_mode_state(config.get(CONF_JEELINK_LED))
@@ -102,8 +107,8 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         name = device_config.get(CONF_NAME, device)
 
         sensors.append(
-            sensor_class(hass, lacrosse, device, name, expire_after, device_config)
-        )
+            sensor_class(hass, lacrosse, device, name, expire_after,
+                         device_config))
 
     add_entities(sensors)
 
@@ -119,18 +124,17 @@ class LaCrosseSensor(Entity):
     def __init__(self, hass, lacrosse, device_id, name, expire_after, config):
         """Initialize the sensor."""
         self.hass = hass
-        self.entity_id = async_generate_entity_id(
-            ENTITY_ID_FORMAT, device_id, hass=hass
-        )
+        self.entity_id = async_generate_entity_id(ENTITY_ID_FORMAT,
+                                                  device_id,
+                                                  hass=hass)
         self._config = config
         self._name = name
         self._value = None
         self._expire_after = expire_after
         self._expiration_trigger = None
 
-        lacrosse.register_callback(
-            int(self._config["id"]), self._callback_lacrosse, None
-        )
+        lacrosse.register_callback(int(self._config["id"]),
+                                   self._callback_lacrosse, None)
 
     @property
     def name(self):
@@ -155,11 +159,11 @@ class LaCrosseSensor(Entity):
                 self._expiration_trigger = None
 
             # Set new trigger
-            expiration_at = dt_util.utcnow() + timedelta(seconds=self._expire_after)
+            expiration_at = dt_util.utcnow() + timedelta(
+                seconds=self._expire_after)
 
             self._expiration_trigger = async_track_point_in_utc_time(
-                self.hass, self.value_is_expired, expiration_at
-            )
+                self.hass, self.value_is_expired, expiration_at)
 
         self._temperature = lacrosse_sensor.temperature
         self._humidity = lacrosse_sensor.humidity
@@ -176,7 +180,6 @@ class LaCrosseSensor(Entity):
 
 class LaCrosseTemperature(LaCrosseSensor):
     """Implementation of a Lacrosse temperature sensor."""
-
     @property
     def unit_of_measurement(self):
         """Return the unit of measurement."""
@@ -190,7 +193,6 @@ class LaCrosseTemperature(LaCrosseSensor):
 
 class LaCrosseHumidity(LaCrosseSensor):
     """Implementation of a Lacrosse humidity sensor."""
-
     @property
     def unit_of_measurement(self):
         """Return the unit of measurement."""
@@ -209,7 +211,6 @@ class LaCrosseHumidity(LaCrosseSensor):
 
 class LaCrosseBattery(LaCrosseSensor):
     """Implementation of a Lacrosse battery sensor."""
-
     @property
     def state(self):
         """Return the state of the sensor."""

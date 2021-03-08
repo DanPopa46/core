@@ -24,18 +24,15 @@ EVENT_VALUE_UPDATED = "value updated"
 
 class ZWaveBaseEntity(Entity):
     """Generic Entity Class for a Z-Wave Device."""
-
-    def __init__(
-        self, config_entry: ConfigEntry, client: ZwaveClient, info: ZwaveDiscoveryInfo
-    ) -> None:
+    def __init__(self, config_entry: ConfigEntry, client: ZwaveClient,
+                 info: ZwaveDiscoveryInfo) -> None:
         """Initialize a generic Z-Wave device entity."""
         self.config_entry = config_entry
         self.client = client
         self.info = info
         self._name = self.generate_name()
-        self._unique_id = get_unique_id(
-            self.client.driver.controller.home_id, self.info.primary_value.value_id
-        )
+        self._unique_id = get_unique_id(self.client.driver.controller.home_id,
+                                        self.info.primary_value.value_id)
         # entities requiring additional values, can add extra ids to this list
         self.watched_value_ids = {self.info.primary_value.value_id}
 
@@ -51,26 +48,22 @@ class ZWaveBaseEntity(Entity):
         assert self.hass
         if not refresh_all_values:
             self.hass.async_create_task(
-                self.info.node.async_poll_value(self.info.primary_value)
-            )
+                self.info.node.async_poll_value(self.info.primary_value))
             LOGGER.info(
-                (
-                    "Refreshing primary value %s for %s, "
-                    "state update may be delayed for devices on battery"
-                ),
+                ("Refreshing primary value %s for %s, "
+                 "state update may be delayed for devices on battery"),
                 self.info.primary_value,
                 self.entity_id,
             )
             return
 
         for value_id in self.watched_value_ids:
-            self.hass.async_create_task(self.info.node.async_poll_value(value_id))
+            self.hass.async_create_task(
+                self.info.node.async_poll_value(value_id))
 
         LOGGER.info(
-            (
-                "Refreshing values %s for %s, state update may be delayed for "
-                "devices on battery"
-            ),
+            ("Refreshing values %s for %s, state update may be delayed for "
+             "devices on battery"),
             ", ".join(self.watched_value_ids),
             self.entity_id,
         )
@@ -80,15 +73,13 @@ class ZWaveBaseEntity(Entity):
         assert self.hass  # typing
         # Add value_changed callbacks.
         self.async_on_remove(
-            self.info.node.on(EVENT_VALUE_UPDATED, self._value_changed)
-        )
+            self.info.node.on(EVENT_VALUE_UPDATED, self._value_changed))
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 f"{DOMAIN}_{self.unique_id}_poll_value",
                 self.async_poll_value,
-            )
-        )
+            ))
 
     @property
     def device_info(self) -> dict:
@@ -107,18 +98,14 @@ class ZWaveBaseEntity(Entity):
         """Generate entity name."""
         if additional_info is None:
             additional_info = []
-        name: str = (
-            self.info.node.name
-            or self.info.node.device_config.description
-            or f"Node {self.info.node.node_id}"
-        )
+        name: str = (self.info.node.name
+                     or self.info.node.device_config.description
+                     or f"Node {self.info.node.node_id}")
         if include_value_name:
-            value_name = (
-                alternate_value_name
-                or self.info.primary_value.metadata.label
-                or self.info.primary_value.property_key_name
-                or self.info.primary_value.property_name
-            )
+            value_name = (alternate_value_name
+                          or self.info.primary_value.metadata.label
+                          or self.info.primary_value.property_key_name
+                          or self.info.primary_value.property_name)
             name = f"{name}: {value_name}"
         for item in additional_info:
             if item:
@@ -213,11 +200,9 @@ class ZWaveBaseEntity(Entity):
                         break
 
         # add to watched_ids list so we will be triggered when the value updates
-        if (
-            return_value
-            and return_value.value_id not in self.watched_value_ids
-            and add_to_watched_value_ids
-        ):
+        if (return_value
+                and return_value.value_id not in self.watched_value_ids
+                and add_to_watched_value_ids):
             self.watched_value_ids.add(return_value.value_id)
         return return_value
 

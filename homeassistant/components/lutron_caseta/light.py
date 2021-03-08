@@ -47,7 +47,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaLight(LutronCasetaDevice, LightEntity):
     """Representation of a Lutron Light, including dimmable."""
-
     @property
     def supported_features(self):
         """Flag supported features."""
@@ -63,9 +62,8 @@ class LutronCasetaLight(LutronCasetaDevice, LightEntity):
         if ATTR_TRANSITION in kwargs:
             args["fade_time"] = timedelta(seconds=kwargs[ATTR_TRANSITION])
 
-        await self._smartbridge.set_value(
-            self.device_id, to_lutron_level(brightness), **args
-        )
+        await self._smartbridge.set_value(self.device_id,
+                                          to_lutron_level(brightness), **args)
 
     async def async_turn_on(self, **kwargs):
         """Turn the light on."""

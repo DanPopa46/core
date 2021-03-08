@@ -30,7 +30,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronOccupancySensor(LutronCasetaDevice, BinarySensorEntity):
     """Representation of a Lutron occupancy group."""
-
     @property
     def device_class(self):
         """Flag supported features."""
@@ -43,9 +42,8 @@ class LutronOccupancySensor(LutronCasetaDevice, BinarySensorEntity):
 
     async def async_added_to_hass(self):
         """Register callbacks."""
-        self._smartbridge.add_occupancy_subscriber(
-            self.device_id, self.async_write_ha_state
-        )
+        self._smartbridge.add_occupancy_subscriber(self.device_id,
+                                                   self.async_write_ha_state)
 
     @property
     def device_id(self):

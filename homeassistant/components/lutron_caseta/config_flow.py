@@ -29,7 +29,6 @@ from homeassistant.core import callback
 
 HOSTNAME = "hostname"
 
-
 FILE_MAPPING = {
     PAIR_KEY: CONF_KEYFILE,
     PAIR_CERT: CONF_CERTFILE,
@@ -63,7 +62,8 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self.data[CONF_HOST] = user_input[CONF_HOST]
             return await self.async_step_link()
 
-        return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA_USER)
+        return self.async_show_form(step_id="user",
+                                    data_schema=DATA_SCHEMA_USER)
 
     async def async_step_zeroconf(self, discovery_info):
         """Handle a flow initialized by zeroconf discovery."""
@@ -97,11 +97,9 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._configure_tls_assets()
 
-        if (
-            not self.attempted_tls_validation
-            and await self.hass.async_add_executor_job(self._tls_assets_exist)
-            and await self.async_validate_connectable_bridge_config()
-        ):
+        if (not self.attempted_tls_validation and await
+                self.hass.async_add_executor_job(self._tls_assets_exist)
+                and await self.async_validate_connectable_bridge_config()):
             self.tls_assets_validated = True
         self.attempted_tls_validation = True
 
@@ -109,7 +107,8 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             if self.tls_assets_validated:
                 # If we previous paired and the tls assets already exist,
                 # we do not need to go though pairing again.
-                return self.async_create_entry(title=self.bridge_id, data=self.data)
+                return self.async_create_entry(title=self.bridge_id,
+                                               data=self.data)
 
             assets = None
             try:
@@ -118,8 +117,10 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
 
             if not errors:
-                await self.hass.async_add_executor_job(self._write_tls_assets, assets)
-                return self.async_create_entry(title=self.bridge_id, data=self.data)
+                await self.hass.async_add_executor_job(self._write_tls_assets,
+                                                       assets)
+                return self.async_create_entry(title=self.bridge_id,
+                                               data=self.data)
 
         return self.async_show_form(
             step_id="link",
@@ -142,7 +143,8 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     def _write_tls_assets(self, assets):
         """Write the tls assets to disk."""
         for asset_key, conf_key in FILE_MAPPING.items():
-            with open(self.hass.config.path(self.data[conf_key]), "w") as file_handle:
+            with open(self.hass.config.path(self.data[conf_key]),
+                      "w") as file_handle:
                 file_handle.write(assets[asset_key])
 
     def _tls_assets_exist(self):
@@ -156,16 +158,15 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     def _configure_tls_assets(self):
         """Fill the tls asset locations in self.data."""
         for asset_key, conf_key in FILE_MAPPING.items():
-            self.data[conf_key] = TLS_ASSET_TEMPLATE.format(self.bridge_id, asset_key)
+            self.data[conf_key] = TLS_ASSET_TEMPLATE.format(
+                self.bridge_id, asset_key)
 
     @callback
     def _async_data_host_is_already_configured(self):
         """Check to see if the host is already configured."""
-        return any(
-            self.data[CONF_HOST] == entry.data[CONF_HOST]
-            for entry in self._async_current_entries()
-            if CONF_HOST in entry.data
-        )
+        return any(self.data[CONF_HOST] == entry.data[CONF_HOST]
+                   for entry in self._async_current_entries()
+                   if CONF_HOST in entry.data)
 
     async def async_step_import(self, import_info):
         """Import a new Caseta bridge as a config entry.
@@ -196,7 +197,8 @@ class LutronCasetaFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             # will require users to go through a confirmation flow for imports).
             return await self.async_step_import_failed()
 
-        return self.async_create_entry(title=ENTRY_DEFAULT_TITLE, data=self.data)
+        return self.async_create_entry(title=ENTRY_DEFAULT_TITLE,
+                                       data=self.data)
 
     async def async_step_import_failed(self, user_input=None):
         """Make failed import surfaced to user."""
