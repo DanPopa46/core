@@ -1,29 +1,28 @@
 """The kmtronic integration."""
 import asyncio
-from datetime import timedelta
 import logging
+from datetime import timedelta
 
 import aiohttp
 import async_timeout
+import voluptuous as vol
 from pykmtronic.auth import Auth
 from pykmtronic.hub import KMTronicHubAPI
-import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
+from .const import DATA_COORDINATOR
+from .const import DATA_HOST
+from .const import DATA_HUB
+from .const import DOMAIN
+from .const import MANUFACTURER
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntryNotReady
+from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import aiohttp_client
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-
-from .const import (
-    CONF_HOSTNAME,
-    CONF_PASSWORD,
-    CONF_USERNAME,
-    DATA_COORDINATOR,
-    DATA_HOST,
-    DATA_HUB,
-    DOMAIN,
-    MANUFACTURER,
-)
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
@@ -41,11 +40,10 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up kmtronic from a config entry."""
-
     session = aiohttp_client.async_get_clientsession(hass)
     auth = Auth(
         session,
-        f"http://{entry.data[CONF_HOSTNAME]}",
+        f"http://{entry.data[CONF_HOST]}",
         entry.data[CONF_USERNAME],
         entry.data[CONF_PASSWORD],
     )
@@ -58,8 +56,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         except aiohttp.client_exceptions.ClientResponseError as err:
             raise UpdateFailed(f"Wrong credentials: {err}") from err
         except (
-            asyncio.TimeoutError,
-            aiohttp.client_exceptions.ClientConnectorError,
+                asyncio.TimeoutError,
+                aiohttp.client_exceptions.ClientConnectorError,
         ) as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
@@ -82,22 +80,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     for platform in PLATFORMS:
         hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(entry, platform)
-        )
+            hass.config_entries.async_forward_entry_setup(entry, platform))
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload a config entry."""
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(entry, platform)
-                for platform in PLATFORMS
-            ]
-        )
-    )
+    unload_ok = all(await asyncio.gather(*[
+        hass.config_entries.async_forward_entry_unload(entry, platform)
+        for platform in PLATFORMS
+    ]))
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 

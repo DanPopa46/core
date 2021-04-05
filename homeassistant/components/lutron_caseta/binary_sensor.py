@@ -1,13 +1,12 @@
 """Support for Lutron Caseta Occupancy/Vacancy Sensors."""
 from pylutron_caseta import OCCUPANCY_GROUP_OCCUPIED
 
-from homeassistant.components.binary_sensor import (
-    DEVICE_CLASS_OCCUPANCY,
-    BinarySensorEntity,
-)
-
-from . import DOMAIN as CASETA_DOMAIN, LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP
+from . import DOMAIN as CASETA_DOMAIN
+from . import LutronCasetaDevice
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import DEVICE_CLASS_OCCUPANCY
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -16,7 +15,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     Adds occupancy groups from the Caseta bridge associated with the
     config_entry as binary_sensor entities.
     """
-
     entities = []
     data = hass.data[CASETA_DOMAIN][config_entry.entry_id]
     bridge = data[BRIDGE_LEAP]
@@ -32,7 +30,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronOccupancySensor(LutronCasetaDevice, BinarySensorEntity):
     """Representation of a Lutron occupancy group."""
-
     @property
     def device_class(self):
         """Flag supported features."""
@@ -45,9 +42,8 @@ class LutronOccupancySensor(LutronCasetaDevice, BinarySensorEntity):
 
     async def async_added_to_hass(self):
         """Register callbacks."""
-        self._smartbridge.add_occupancy_subscriber(
-            self.device_id, self.async_write_ha_state
-        )
+        self._smartbridge.add_occupancy_subscriber(self.device_id,
+                                                   self.async_write_ha_state)
 
     @property
     def device_id(self):

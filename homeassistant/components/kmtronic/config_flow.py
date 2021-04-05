@@ -2,28 +2,34 @@
 import logging
 
 import aiohttp
+import voluptuous as vol
 from pykmtronic.auth import Auth
 from pykmtronic.hub import KMTronicHubAPI
-import voluptuous as vol
 
-from homeassistant import config_entries, core, exceptions
-from homeassistant.helpers import aiohttp_client
-
-from .const import CONF_HOSTNAME, CONF_PASSWORD, CONF_USERNAME
 from .const import DOMAIN  # pylint:disable=unused-import
+from homeassistant import config_entries
+from homeassistant import core
+from homeassistant import exceptions
+from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_USERNAME
+from homeassistant.helpers import aiohttp_client
 
 _LOGGER = logging.getLogger(__name__)
 
-DATA_SCHEMA = vol.Schema({CONF_HOSTNAME: str, CONF_USERNAME: str, CONF_PASSWORD: str})
+DATA_SCHEMA = vol.Schema({
+    CONF_HOST: str,
+    CONF_USERNAME: str,
+    CONF_PASSWORD: str
+})
 
 
 async def validate_input(hass: core.HomeAssistant, data):
     """Validate the user input allows us to connect."""
-
     session = aiohttp_client.async_get_clientsession(hass)
     auth = Auth(
         session,
-        f"http://{data[CONF_HOSTNAME]}",
+        f"http://{data[CONF_HOST]}",
         data[CONF_USERNAME],
         data[CONF_PASSWORD],
     )
@@ -52,7 +58,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 info = await validate_input(self.hass, user_input)
 
-                return self.async_create_entry(title=info["host"], data=user_input)
+                return self.async_create_entry(title=info["host"],
+                                               data=user_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -61,9 +68,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
 
-        return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA, errors=errors
-        )
+        return self.async_show_form(step_id="user",
+                                    data_schema=DATA_SCHEMA,
+                                    errors=errors)
 
 
 class CannotConnect(exceptions.HomeAssistantError):
