@@ -231,7 +231,11 @@ async def test_dimmable_light(hass):
     device = (
         "light.test_2",
         "on",
-        {"brightness": 128, "friendly_name": "Test light 2", "supported_features": 1},
+        {
+            "brightness": 128,
+            "friendly_name": "Test light 2",
+            "supported_color_modes": ["brightness"],
+        },
     )
     appliance = await discovery_test(device, hass)
 
@@ -262,14 +266,18 @@ async def test_dimmable_light(hass):
     assert call.data["brightness_pct"] == 50
 
 
-async def test_color_light(hass):
+@pytest.mark.parametrize(
+    "supported_color_modes",
+    [["color_temp", "hs"], ["color_temp", "rgb"], ["color_temp", "xy"]],
+)
+async def test_color_light(hass, supported_color_modes):
     """Test color light discovery."""
     device = (
         "light.test_3",
         "on",
         {
             "friendly_name": "Test light 3",
-            "supported_features": 19,
+            "supported_color_modes": supported_color_modes,
             "min_mireds": 142,
             "color_temp": "333",
         },
@@ -377,8 +385,6 @@ async def test_variable_fan(hass):
         {
             "friendly_name": "Test fan 2",
             "supported_features": 1,
-            "speed_list": ["low", "medium", "high"],
-            "speed": "high",
             "percentage": 100,
         },
     )
@@ -393,28 +399,18 @@ async def test_variable_fan(hass):
         "Alexa.PercentageController",
         "Alexa.PowerController",
         "Alexa.PowerLevelController",
-        "Alexa.RangeController",
         "Alexa.EndpointHealth",
         "Alexa",
     )
 
-    range_capability = get_capability(capabilities, "Alexa.RangeController")
-    assert range_capability is not None
-    assert range_capability["instance"] == "fan.speed"
+    capability = get_capability(capabilities, "Alexa.PercentageController")
+    assert capability is not None
 
-    properties = range_capability["properties"]
-    assert properties["nonControllable"] is False
-    assert {"name": "rangeValue"} in properties["supported"]
+    capability = get_capability(capabilities, "Alexa.PowerController")
+    assert capability is not None
 
-    capability_resources = range_capability["capabilityResources"]
-    assert capability_resources is not None
-    assert {
-        "@type": "asset",
-        "value": {"assetId": "Alexa.Setting.FanSpeed"},
-    } in capability_resources["friendlyNames"]
-
-    configuration = range_capability["configuration"]
-    assert configuration is not None
+    capability = get_capability(capabilities, "Alexa.PowerLevelController")
+    assert capability is not None
 
     call, _ = await assert_request_calls_service(
         "Alexa.PercentageController",
@@ -663,179 +659,87 @@ async def test_direction_fan(hass):
         assert call.data
 
 
-async def test_fan_range(hass):
-    """Test fan speed with rangeController."""
+async def test_preset_mode_fan(hass, caplog):
+    """Test fan discovery.
+
+    This one has preset modes.
+    """
     device = (
-        "fan.test_5",
+        "fan.test_7",
         "off",
         {
-            "friendly_name": "Test fan 5",
-            "supported_features": 1,
-            "speed_list": ["off", "low", "medium", "high", "turbo", 5, "warp_speed"],
-            "speed": "medium",
+            "friendly_name": "Test fan 7",
+            "supported_features": 8,
+            "preset_modes": ["auto", "eco", "smart", "whoosh"],
+            "preset_mode": "auto",
         },
     )
     appliance = await discovery_test(device, hass)
 
-    assert appliance["endpointId"] == "fan#test_5"
+    assert appliance["endpointId"] == "fan#test_7"
     assert appliance["displayCategories"][0] == "FAN"
-    assert appliance["friendlyName"] == "Test fan 5"
+    assert appliance["friendlyName"] == "Test fan 7"
 
     capabilities = assert_endpoint_capabilities(
         appliance,
-        "Alexa.PercentageController",
-        "Alexa.PowerController",
-        "Alexa.PowerLevelController",
-        "Alexa.RangeController",
         "Alexa.EndpointHealth",
+        "Alexa.ModeController",
+        "Alexa.PowerController",
         "Alexa",
     )
 
-    range_capability = get_capability(capabilities, "Alexa.RangeController")
+    range_capability = get_capability(capabilities, "Alexa.ModeController")
     assert range_capability is not None
-    assert range_capability["instance"] == "fan.speed"
+    assert range_capability["instance"] == "fan.preset_mode"
+
+    properties = range_capability["properties"]
+    assert properties["nonControllable"] is False
+    assert {"name": "mode"} in properties["supported"]
 
     capability_resources = range_capability["capabilityResources"]
     assert capability_resources is not None
     assert {
         "@type": "asset",
-        "value": {"assetId": "Alexa.Setting.FanSpeed"},
+        "value": {"assetId": "Alexa.Setting.Preset"},
     } in capability_resources["friendlyNames"]
 
     configuration = range_capability["configuration"]
     assert configuration is not None
 
-    supported_range = configuration["supportedRange"]
-    assert supported_range["minimumValue"] == 0
-    assert supported_range["maximumValue"] == 6
-    assert supported_range["precision"] == 1
-
-    presets = configuration["presets"]
-    assert {
-        "rangeValue": 0,
-        "presetResources": {
-            "friendlyNames": [
-                {"@type": "text", "value": {"text": "off", "locale": "en-US"}}
-            ]
-        },
-    } in presets
-
-    assert {
-        "rangeValue": 1,
-        "presetResources": {
-            "friendlyNames": [
-                {"@type": "text", "value": {"text": "low", "locale": "en-US"}},
-                {"@type": "asset", "value": {"assetId": "Alexa.Value.Minimum"}},
-            ]
-        },
-    } in presets
-
-    assert {
-        "rangeValue": 2,
-        "presetResources": {
-            "friendlyNames": [
-                {"@type": "text", "value": {"text": "medium", "locale": "en-US"}}
-            ]
-        },
-    } in presets
-
-    assert {"rangeValue": 5} not in presets
-
-    assert {
-        "rangeValue": 6,
-        "presetResources": {
-            "friendlyNames": [
-                {"@type": "text", "value": {"text": "warp speed", "locale": "en-US"}},
-                {"@type": "asset", "value": {"assetId": "Alexa.Value.Maximum"}},
-            ]
-        },
-    } in presets
+    call, _ = await assert_request_calls_service(
+        "Alexa.ModeController",
+        "SetMode",
+        "fan#test_7",
+        "fan.set_preset_mode",
+        hass,
+        payload={"mode": "preset_mode.eco"},
+        instance="fan.preset_mode",
+    )
+    assert call.data["preset_mode"] == "eco"
 
     call, _ = await assert_request_calls_service(
-        "Alexa.RangeController",
-        "SetRangeValue",
-        "fan#test_5",
-        "fan.set_speed",
+        "Alexa.ModeController",
+        "SetMode",
+        "fan#test_7",
+        "fan.set_preset_mode",
         hass,
-        payload={"rangeValue": 1},
-        instance="fan.speed",
+        payload={"mode": "preset_mode.whoosh"},
+        instance="fan.preset_mode",
     )
-    assert call.data["speed"] == "low"
+    assert call.data["preset_mode"] == "whoosh"
 
-    call, _ = await assert_request_calls_service(
-        "Alexa.RangeController",
-        "SetRangeValue",
-        "fan#test_5",
-        "fan.set_speed",
-        hass,
-        payload={"rangeValue": 5},
-        instance="fan.speed",
-    )
-    assert call.data["speed"] == 5
-
-    call, _ = await assert_request_calls_service(
-        "Alexa.RangeController",
-        "SetRangeValue",
-        "fan#test_5",
-        "fan.set_speed",
-        hass,
-        payload={"rangeValue": 6},
-        instance="fan.speed",
-    )
-    assert call.data["speed"] == "warp_speed"
-
-    await assert_range_changes(
-        hass,
-        [
-            ("low", -1, False),
-            ("high", 1, False),
-            ("medium", 0, False),
-            ("warp_speed", 99, False),
-        ],
-        "Alexa.RangeController",
-        "AdjustRangeValue",
-        "fan#test_5",
-        "fan.set_speed",
-        "speed",
-        instance="fan.speed",
-    )
-
-
-async def test_fan_range_off(hass):
-    """Test fan range controller 0 turns_off fan."""
-    device = (
-        "fan.test_6",
-        "off",
-        {
-            "friendly_name": "Test fan 6",
-            "supported_features": 1,
-            "speed_list": ["off", "low", "medium", "high"],
-            "speed": "high",
-        },
-    )
-    await discovery_test(device, hass)
-
-    call, _ = await assert_request_calls_service(
-        "Alexa.RangeController",
-        "SetRangeValue",
-        "fan#test_6",
-        "fan.turn_off",
-        hass,
-        payload={"rangeValue": 0},
-        instance="fan.speed",
-    )
-    assert call.data["speed"] == "off"
-
-    await assert_range_changes(
-        hass,
-        [("off", -3, False), ("off", -99, False)],
-        "Alexa.RangeController",
-        "AdjustRangeValue",
-        "fan#test_6",
-        "fan.turn_off",
-        "speed",
-        instance="fan.speed",
-    )
+    with pytest.raises(AssertionError):
+        await assert_request_calls_service(
+            "Alexa.ModeController",
+            "SetMode",
+            "fan#test_7",
+            "fan.set_preset_mode",
+            hass,
+            payload={"mode": "preset_mode.invalid"},
+            instance="fan.preset_mode",
+        )
+    assert "Entity 'fan.test_7' does not support Preset 'invalid'" in caplog.text
+    caplog.clear()
 
 
 async def test_lock(hass):
@@ -2476,7 +2380,7 @@ async def test_alarm_control_panel_disarmed(hass):
     properties = ReportedProperties(msg["context"]["properties"])
     properties.assert_equal("Alexa.SecurityPanelController", "armState", "ARMED_AWAY")
 
-    call, msg = await assert_request_calls_service(
+    _, msg = await assert_request_calls_service(
         "Alexa.SecurityPanelController",
         "Arm",
         "alarm_control_panel#test_1",
@@ -3256,6 +3160,7 @@ async def test_media_player_eq_modes(hass):
 
     eq_capability = get_capability(capabilities, "Alexa.EqualizerController")
     assert eq_capability is not None
+    assert eq_capability["properties"]["retrievable"]
     assert "modes" in eq_capability["configurations"]
 
     eq_modes = eq_capability["configurations"]["modes"]

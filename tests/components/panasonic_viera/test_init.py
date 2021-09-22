@@ -1,5 +1,5 @@
 """Test the Panasonic Viera setup process."""
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from homeassistant.components.panasonic_viera.const import (
     ATTR_DEVICE_INFO,
@@ -7,7 +7,7 @@ from homeassistant.components.panasonic_viera.const import (
     DEFAULT_NAME,
     DOMAIN,
 )
-from homeassistant.config_entries import ENTRY_STATE_NOT_LOADED
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, STATE_UNAVAILABLE
 from homeassistant.setup import async_setup_component
 
@@ -185,14 +185,21 @@ async def test_setup_entry_unencrypted_missing_device_info_none(hass):
 
 async def test_setup_config_flow_initiated(hass):
     """Test if config flow is initiated in setup."""
-    assert (
-        await async_setup_component(
-            hass,
-            DOMAIN,
-            {DOMAIN: {CONF_HOST: "0.0.0.0"}},
+    mock_remote = get_mock_remote()
+    mock_remote.get_device_info = Mock(side_effect=OSError)
+
+    with patch(
+        "homeassistant.components.panasonic_viera.config_flow.RemoteControl",
+        return_value=mock_remote,
+    ):
+        assert (
+            await async_setup_component(
+                hass,
+                DOMAIN,
+                {DOMAIN: {CONF_HOST: "0.0.0.0"}},
+            )
+            is True
         )
-        is True
-    )
 
     assert len(hass.config_entries.flow.async_progress()) == 1
 
@@ -209,7 +216,7 @@ async def test_setup_unload_entry(hass, mock_remote):
     await hass.async_block_till_done()
 
     await hass.config_entries.async_unload(mock_entry.entry_id)
-    assert mock_entry.state == ENTRY_STATE_NOT_LOADED
+    assert mock_entry.state is ConfigEntryState.NOT_LOADED
 
     state_tv = hass.states.get("media_player.panasonic_viera_tv")
     state_remote = hass.states.get("remote.panasonic_viera_tv")

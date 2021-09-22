@@ -392,7 +392,7 @@ async def async_setup(hass, config):
     return True
 
 
-async def async_setup_entry(hass, config_entry):
+async def async_setup_entry(hass, config_entry):  # noqa: C901
     """Set up Z-Wave from a config entry.
 
     Will automatically load components to support devices found on the network.
@@ -889,9 +889,7 @@ async def async_setup_entry(hass, config_entry):
                 continue
             network.manager.pressButton(value.value_id)
             network.manager.releaseButton(value.value_id)
-            _LOGGER.info(
-                "Resetting meters on node %s instance %s....", node_id, instance
-            )
+            _LOGGER.info("Resetting meters on node %s instance %s", node_id, instance)
             return
         _LOGGER.info(
             "Node %s on instance %s does not have resettable meters", node_id, instance
@@ -915,7 +913,7 @@ async def async_setup_entry(hass, config_entry):
 
     def start_zwave(_service_or_event):
         """Startup Z-Wave network."""
-        _LOGGER.info("Starting Z-Wave network...")
+        _LOGGER.info("Starting Z-Wave network")
         network.start()
         hass.bus.fire(const.EVENT_NETWORK_START)
 
@@ -939,7 +937,7 @@ async def async_setup_entry(hass, config_entry):
                         "Z-Wave not ready after %d seconds, continuing anyway", waited
                     )
                     _LOGGER.info(
-                        "final network state: %d %s", network.state, network.state_str
+                        "Final network state: %d %s", network.state, network.state_str
                     )
                     break
 
@@ -1116,8 +1114,8 @@ class ZWaveDeviceEntityValues:
         """
         if not check_node_schema(value.node, self._schema):
             return
-        for name in self._values:
-            if self._values[name] is not None:
+        for name, name_value in self._values.items():
+            if name_value is not None:
                 continue
             if not check_value_schema(value, self._schema[const.DISC_VALUES][name]):
                 continue
@@ -1362,7 +1360,7 @@ class ZWaveDeviceEntity(ZWaveBaseEntity):
         return self._name
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the device specific state attributes."""
         attrs = {
             const.ATTR_NODE_ID: self.node_id,

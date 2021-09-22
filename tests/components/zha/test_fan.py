@@ -49,6 +49,9 @@ from .common import (
     get_zha_gateway,
     send_attributes_report,
 )
+from .conftest import SIG_EP_INPUT, SIG_EP_OUTPUT, SIG_EP_PROFILE, SIG_EP_TYPE
+
+from tests.components.zha.common import async_wait_for_updates
 
 IEEE_GROUPABLE_DEVICE = "01:2d:6f:00:0a:90:69:e8"
 IEEE_GROUPABLE_DEVICE2 = "02:2d:6f:00:0a:90:69:e8"
@@ -59,9 +62,10 @@ def zigpy_device(zigpy_device_mock):
     """Device tracker zigpy device."""
     endpoints = {
         1: {
-            "in_clusters": [hvac.Fan.cluster_id],
-            "out_clusters": [],
-            "device_type": zha.DeviceType.ON_OFF_SWITCH,
+            SIG_EP_INPUT: [hvac.Fan.cluster_id],
+            SIG_EP_OUTPUT: [],
+            SIG_EP_TYPE: zha.DeviceType.ON_OFF_SWITCH,
+            SIG_EP_PROFILE: zha.PROFILE_ID,
         }
     }
     return zigpy_device_mock(
@@ -76,9 +80,10 @@ async def coordinator(hass, zigpy_device_mock, zha_device_joined):
     zigpy_device = zigpy_device_mock(
         {
             1: {
-                "in_clusters": [general.Groups.cluster_id],
-                "out_clusters": [],
-                "device_type": zha.DeviceType.COLOR_DIMMABLE_LIGHT,
+                SIG_EP_INPUT: [general.Groups.cluster_id],
+                SIG_EP_OUTPUT: [],
+                SIG_EP_TYPE: zha.DeviceType.COLOR_DIMMABLE_LIGHT,
+                SIG_EP_PROFILE: zha.PROFILE_ID,
             }
         },
         ieee="00:15:8d:00:02:32:4f:32",
@@ -97,13 +102,14 @@ async def device_fan_1(hass, zigpy_device_mock, zha_device_joined):
     zigpy_device = zigpy_device_mock(
         {
             1: {
-                "in_clusters": [
+                SIG_EP_INPUT: [
                     general.Groups.cluster_id,
                     general.OnOff.cluster_id,
                     hvac.Fan.cluster_id,
                 ],
-                "out_clusters": [],
-                "device_type": zha.DeviceType.ON_OFF_LIGHT,
+                SIG_EP_OUTPUT: [],
+                SIG_EP_TYPE: zha.DeviceType.ON_OFF_LIGHT,
+                SIG_EP_PROFILE: zha.PROFILE_ID,
             },
         },
         ieee=IEEE_GROUPABLE_DEVICE,
@@ -121,14 +127,15 @@ async def device_fan_2(hass, zigpy_device_mock, zha_device_joined):
     zigpy_device = zigpy_device_mock(
         {
             1: {
-                "in_clusters": [
+                SIG_EP_INPUT: [
                     general.Groups.cluster_id,
                     general.OnOff.cluster_id,
                     hvac.Fan.cluster_id,
                     general.LevelControl.cluster_id,
                 ],
-                "out_clusters": [],
-                "device_type": zha.DeviceType.ON_OFF_LIGHT,
+                SIG_EP_OUTPUT: [],
+                SIG_EP_TYPE: zha.DeviceType.ON_OFF_LIGHT,
+                SIG_EP_PROFILE: zha.PROFILE_ID,
             },
         },
         ieee=IEEE_GROUPABLE_DEVICE2,
@@ -246,6 +253,10 @@ async def async_set_preset_mode(hass, entity_id, preset_mode=None):
     "zigpy.zcl.clusters.hvac.Fan.write_attributes",
     new=AsyncMock(return_value=zcl_f.WriteAttributesResponse.deserialize(b"\x00")[0]),
 )
+@patch(
+    "homeassistant.components.zha.entity.UPDATE_GROUP_FROM_CHILD_DELAY",
+    new=0,
+)
 async def test_zha_group_fan_entity(hass, device_fan_1, device_fan_2, coordinator):
     """Test the fan entity for a ZHA group."""
     zha_gateway = get_zha_gateway(hass)
@@ -283,13 +294,13 @@ async def test_zha_group_fan_entity(hass, device_fan_1, device_fan_2, coordinato
     dev2_fan_cluster = device_fan_2.device.endpoints[1].fan
 
     await async_enable_traffic(hass, [device_fan_1, device_fan_2], enabled=False)
-    await hass.async_block_till_done()
+    await async_wait_for_updates(hass)
     # test that the fans were created and that they are unavailable
     assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
 
     # allow traffic to flow through the gateway and device
     await async_enable_traffic(hass, [device_fan_1, device_fan_2])
-
+    await async_wait_for_updates(hass)
     # test that the fan group entity was created and is off
     assert hass.states.get(entity_id).state == STATE_OFF
 
@@ -338,13 +349,13 @@ async def test_zha_group_fan_entity(hass, device_fan_1, device_fan_2, coordinato
     assert hass.states.get(entity_id).state == STATE_OFF
 
     await send_attributes_report(hass, dev2_fan_cluster, {0: 2})
-    await hass.async_block_till_done()
+    await async_wait_for_updates(hass)
 
     # test that group fan is speed medium
     assert hass.states.get(entity_id).state == STATE_ON
 
     await send_attributes_report(hass, dev2_fan_cluster, {0: 0})
-    await hass.async_block_till_done()
+    await async_wait_for_updates(hass)
 
     # test that group fan is now off
     assert hass.states.get(entity_id).state == STATE_OFF
@@ -353,6 +364,10 @@ async def test_zha_group_fan_entity(hass, device_fan_1, device_fan_2, coordinato
 @patch(
     "zigpy.zcl.clusters.hvac.Fan.write_attributes",
     new=AsyncMock(side_effect=ZigbeeException),
+)
+@patch(
+    "homeassistant.components.zha.entity.UPDATE_GROUP_FROM_CHILD_DELAY",
+    new=0,
 )
 async def test_zha_group_fan_entity_failure_state(
     hass, device_fan_1, device_fan_2, coordinator, caplog
@@ -390,13 +405,13 @@ async def test_zha_group_fan_entity_failure_state(
     group_fan_cluster = zha_group.endpoint[hvac.Fan.cluster_id]
 
     await async_enable_traffic(hass, [device_fan_1, device_fan_2], enabled=False)
-    await hass.async_block_till_done()
+    await async_wait_for_updates(hass)
     # test that the fans were created and that they are unavailable
     assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
 
     # allow traffic to flow through the gateway and device
     await async_enable_traffic(hass, [device_fan_1, device_fan_2])
-
+    await async_wait_for_updates(hass)
     # test that the fan group entity was created and is off
     assert hass.states.get(entity_id).state == STATE_OFF
 
@@ -461,7 +476,7 @@ async def test_fan_update_entity(
     assert hass.states.get(entity_id).attributes[ATTR_PERCENTAGE] == 0
     assert hass.states.get(entity_id).attributes[ATTR_PRESET_MODE] is None
     assert hass.states.get(entity_id).attributes[ATTR_PERCENTAGE_STEP] == 100 / 3
-    assert cluster.read_attributes.await_count == 1
+    assert cluster.read_attributes.await_count == 2
 
     await async_setup_component(hass, "homeassistant", {})
     await hass.async_block_till_done()
@@ -471,7 +486,7 @@ async def test_fan_update_entity(
     )
     assert hass.states.get(entity_id).state == STATE_OFF
     assert hass.states.get(entity_id).attributes[ATTR_SPEED] == SPEED_OFF
-    assert cluster.read_attributes.await_count == 2
+    assert cluster.read_attributes.await_count == 3
 
     cluster.PLUGGED_ATTR_READS = {"fan_mode": 1}
     await hass.services.async_call(
@@ -482,4 +497,4 @@ async def test_fan_update_entity(
     assert hass.states.get(entity_id).attributes[ATTR_SPEED] == SPEED_LOW
     assert hass.states.get(entity_id).attributes[ATTR_PRESET_MODE] is None
     assert hass.states.get(entity_id).attributes[ATTR_PERCENTAGE_STEP] == 100 / 3
-    assert cluster.read_attributes.await_count == 3
+    assert cluster.read_attributes.await_count == 4

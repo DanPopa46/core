@@ -71,7 +71,7 @@ class HMDevice(Entity):
         return self._available
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes."""
         # Static attributes
         attr = {
@@ -231,14 +231,14 @@ class HMHub(Entity):
         return self._state
 
     @property
-    def state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes."""
         return self._variables.copy()
 
     @property
     def icon(self):
         """Return the icon to use in the frontend, if any."""
-        return "mdi:gradient"
+        return "mdi:gradient-vertical"
 
     def _update_hub(self, now):
         """Retrieve latest state."""

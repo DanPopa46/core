@@ -1,7 +1,7 @@
 """Home automation channels module for Zigbee Home Automation."""
-from typing import Coroutine, Optional
+from __future__ import annotations
 
-import zigpy.zcl.clusters.homeautomation as homeautomation
+from zigpy.zcl.clusters import homeautomation
 
 from .. import registries
 from ..const import (
@@ -47,6 +47,12 @@ class ElectricalMeasurementChannel(ZigbeeChannel):
     CHANNEL_NAME = CHANNEL_ELECTRICAL_MEASUREMENT
 
     REPORT_CONFIG = ({"attr": "active_power", "config": REPORT_CONFIG_DEFAULT},)
+    ZCL_INIT_ATTRS = {
+        "ac_power_divisor": True,
+        "power_divisor": True,
+        "ac_power_multiplier": True,
+        "power_multiplier": True,
+    }
 
     async def async_update(self):
         """Retrieve latest state."""
@@ -62,28 +68,15 @@ class ElectricalMeasurementChannel(ZigbeeChannel):
                 result,
             )
 
-    def async_initialize_channel_specific(self, from_cache: bool) -> Coroutine:
-        """Initialize channel specific attributes."""
-
-        return self.get_attributes(
-            [
-                "ac_power_divisor",
-                "power_divisor",
-                "ac_power_multiplier",
-                "power_multiplier",
-            ],
-            from_cache=True,
-        )
-
     @property
-    def divisor(self) -> Optional[int]:
+    def divisor(self) -> int | None:
         """Return active power divisor."""
         return self.cluster.get(
             "ac_power_divisor", self.cluster.get("power_divisor", 1)
         )
 
     @property
-    def multiplier(self) -> Optional[int]:
+    def multiplier(self) -> int | None:
         """Return active power divisor."""
         return self.cluster.get(
             "ac_power_multiplier", self.cluster.get("power_multiplier", 1)

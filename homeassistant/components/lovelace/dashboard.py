@@ -1,4 +1,6 @@
 """Lovelace dashboard support."""
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 import logging
 import os
@@ -67,10 +69,12 @@ class LovelaceConfig(ABC):
 
     async def async_save(self, config):
         """Save config."""
+        # pylint: disable=no-self-use
         raise HomeAssistantError("Not supported")
 
     async def async_delete(self):
         """Delete config."""
+        # pylint: disable=no-self-use
         raise HomeAssistantError("Not supported")
 
     @callback
@@ -231,7 +235,7 @@ class DashboardsCollection(collection.StorageCollection):
             _LOGGER,
         )
 
-    async def _async_load_data(self) -> Optional[dict]:
+    async def _async_load_data(self) -> dict | None:
         """Load the data."""
         data = await self.store.async_load()
 

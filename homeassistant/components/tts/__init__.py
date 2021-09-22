@@ -1,13 +1,16 @@
 """Provide functionality for TTS."""
+from __future__ import annotations
+
 import asyncio
 import functools as ft
 import hashlib
+from http import HTTPStatus
 import io
 import logging
 import mimetypes
 import os
 import re
-from typing import Dict, Optional, cast
+from typing import Optional, Tuple, cast
 
 from aiohttp import web
 import mutagen
@@ -24,18 +27,18 @@ from homeassistant.components.media_player.const import (
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
+    CONF_DESCRIPTION,
     CONF_NAME,
     CONF_PLATFORM,
-    HTTP_BAD_REQUEST,
     HTTP_NOT_FOUND,
+    PLATFORM_FORMAT,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_per_platform, discovery
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.network import get_url
 from homeassistant.helpers.service import async_set_service_schema
-from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.loader import async_get_integration
 from homeassistant.setup import async_prepare_setup_platform
 from homeassistant.util.yaml import load_yaml
@@ -43,6 +46,8 @@ from homeassistant.util.yaml import load_yaml
 # mypy: allow-untyped-defs, no-check-untyped-defs
 
 _LOGGER = logging.getLogger(__name__)
+
+TtsAudioType = Tuple[Optional[str], Optional[bytes]]
 
 ATTR_CACHE = "cache"
 ATTR_LANGUAGE = "language"
@@ -59,7 +64,6 @@ CONF_LANG = "language"
 CONF_SERVICE_NAME = "service_name"
 CONF_TIME_MEMORY = "time_memory"
 
-CONF_DESCRIPTION = "description"
 CONF_FIELDS = "fields"
 
 DEFAULT_CACHE = True
@@ -243,7 +247,7 @@ async def async_setup(hass, config):
     return True
 
 
-def _hash_options(options: Dict) -> str:
+def _hash_options(options: dict) -> str:
     """Hashes an options dictionary."""
     opts_hash = hashlib.blake2s(digest_size=5)
     for key, value in sorted(options.items()):
@@ -313,6 +317,10 @@ class SpeechManager:
         if provider.name is None:
             provider.name = engine
         self.providers[engine] = provider
+
+        self.hass.config.components.add(
+            PLATFORM_FORMAT.format(domain=engine, platform=DOMAIN)
+        )
 
     async def async_get_url_path(
         self, engine, message, cache=None, language=None, options=None
@@ -512,8 +520,8 @@ class SpeechManager:
 class Provider:
     """Represent a single TTS provider."""
 
-    hass: Optional[HomeAssistantType] = None
-    name: Optional[str] = None
+    hass: HomeAssistant | None = None
+    name: str | None = None
 
     @property
     def default_language(self):
@@ -590,10 +598,10 @@ class TextToSpeechUrlView(HomeAssistantView):
         try:
             data = await request.json()
         except ValueError:
-            return self.json_message("Invalid JSON specified", HTTP_BAD_REQUEST)
+            return self.json_message("Invalid JSON specified", HTTPStatus.BAD_REQUEST)
         if not data.get(ATTR_PLATFORM) and data.get(ATTR_MESSAGE):
             return self.json_message(
-                "Must specify platform and message", HTTP_BAD_REQUEST
+                "Must specify platform and message", HTTPStatus.BAD_REQUEST
             )
 
         p_type = data[ATTR_PLATFORM]
@@ -608,7 +616,7 @@ class TextToSpeechUrlView(HomeAssistantView):
             )
         except HomeAssistantError as err:
             _LOGGER.error("Error on init tts: %s", err)
-            return self.json({"error": err}, HTTP_BAD_REQUEST)
+            return self.json({"error": err}, HTTPStatus.BAD_REQUEST)
 
         base = self.tts.base_url or get_url(self.tts.hass)
         url = base + path

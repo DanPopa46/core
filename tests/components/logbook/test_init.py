@@ -1289,6 +1289,45 @@ async def test_logbook_entity_matches_only(hass, hass_client):
     assert json_dict[1]["context_user_id"] == "9400facee45711eaa9308bfd3d19e474"
 
 
+async def test_custom_log_entry_discoverable_via_entity_matches_only(hass, hass_client):
+    """Test if a custom log entry is later discoverable via entity_matches_only."""
+    await hass.async_add_executor_job(init_recorder_component, hass)
+    await async_setup_component(hass, "logbook", {})
+    await hass.async_add_executor_job(hass.data[recorder.DATA_INSTANCE].block_till_done)
+
+    logbook.async_log_entry(
+        hass,
+        "Alarm",
+        "is triggered",
+        "switch",
+        "switch.test_switch",
+    )
+    await hass.async_block_till_done()
+    await hass.async_add_executor_job(trigger_db_commit, hass)
+    await hass.async_block_till_done()
+    await hass.async_add_executor_job(hass.data[recorder.DATA_INSTANCE].block_till_done)
+
+    client = await hass_client()
+
+    # Today time 00:00:00
+    start = dt_util.utcnow().date()
+    start_date = datetime(start.year, start.month, start.day)
+
+    # Test today entries with filter by end_time
+    end_time = start + timedelta(hours=24)
+    response = await client.get(
+        f"/api/logbook/{start_date.isoformat()}?end_time={end_time.isoformat()}&entity=switch.test_switch&entity_matches_only"
+    )
+    assert response.status == 200
+    json_dict = await response.json()
+
+    assert len(json_dict) == 1
+
+    assert json_dict[0]["name"] == "Alarm"
+    assert json_dict[0]["message"] == "is triggered"
+    assert json_dict[0]["entity_id"] == "switch.test_switch"
+
+
 async def test_logbook_entity_matches_only_multiple(hass, hass_client):
     """Test the logbook view with a multiple entities and entity_matches_only."""
     await hass.async_add_executor_job(init_recorder_component, hass)
@@ -1801,17 +1840,52 @@ async def test_empty_config(hass, hass_client):
     _assert_entry(entries[1], name="blu", entity_id=entity_id)
 
 
-async def _async_fetch_logbook(client):
+async def test_context_filter(hass, hass_client):
+    """Test we can filter by context."""
+    await hass.async_add_executor_job(init_recorder_component, hass)
+    assert await async_setup_component(hass, "logbook", {})
+    await hass.async_add_executor_job(hass.data[recorder.DATA_INSTANCE].block_till_done)
+
+    entity_id = "switch.blu"
+    context = ha.Context()
+
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_START)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    hass.states.async_set(entity_id, None)
+    hass.states.async_set(entity_id, "on", context=context)
+    hass.states.async_set(entity_id, "off")
+    hass.states.async_set(entity_id, "unknown", context=context)
+
+    await _async_commit_and_wait(hass)
+    client = await hass_client()
+
+    # Test results
+    entries = await _async_fetch_logbook(client, {"context_id": context.id})
+
+    assert len(entries) == 2
+    _assert_entry(entries[0], entity_id=entity_id, state="on")
+    _assert_entry(entries[1], entity_id=entity_id, state="unknown")
+
+    # Test we can't combine context filter with entity_id filter
+    response = await client.get(
+        "/api/logbook", params={"context_id": context.id, "entity": entity_id}
+    )
+    assert response.status == 400
+
+
+async def _async_fetch_logbook(client, params=None):
+    if params is None:
+        params = {}
 
     # Today time 00:00:00
     start = dt_util.utcnow().date()
     start_date = datetime(start.year, start.month, start.day) - timedelta(hours=24)
 
+    if "end_time" not in params:
+        params["end_time"] = str(start + timedelta(hours=48))
+
     # Test today entries without filters
-    end_time = start + timedelta(hours=48)
-    response = await client.get(
-        f"/api/logbook/{start_date.isoformat()}?end_time={end_time}"
-    )
+    response = await client.get(f"/api/logbook/{start_date.isoformat()}", params=params)
     assert response.status == 200
     return await response.json()
 
@@ -1825,7 +1899,7 @@ async def _async_commit_and_wait(hass):
 
 
 def _assert_entry(
-    entry, when=None, name=None, message=None, domain=None, entity_id=None
+    entry, when=None, name=None, message=None, domain=None, entity_id=None, state=None
 ):
     """Assert an entry is what is expected."""
     if when:
@@ -1842,6 +1916,9 @@ def _assert_entry(
 
     if entity_id:
         assert entity_id == entry["entity_id"]
+
+    if state:
+        assert state == entry["state"]
 
 
 class MockLazyEventPartialState(ha.Event):

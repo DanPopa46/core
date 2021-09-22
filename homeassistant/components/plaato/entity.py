@@ -7,9 +7,9 @@ from .const import (
     DEVICE,
     DEVICE_ID,
     DEVICE_NAME,
-    DEVICE_STATE_ATTRIBUTES,
     DEVICE_TYPE,
     DOMAIN,
+    EXTRA_STATE_ATTRIBUTES,
     SENSOR_DATA,
     SENSOR_SIGNAL,
 )
@@ -68,12 +68,12 @@ class PlaatoEntity(entity.Entity):
         return device_info
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes of the monitored installation."""
         if self._attributes:
             return {
                 attr_key: self._attributes[plaato_key]
-                for attr_key, plaato_key in DEVICE_STATE_ATTRIBUTES.items()
+                for attr_key, plaato_key in EXTRA_STATE_ATTRIBUTES.items()
                 if plaato_key in self._attributes
                 and self._attributes[plaato_key] is not None
             }

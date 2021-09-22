@@ -4,10 +4,9 @@ import asyncio
 import async_timeout
 from pydeconz import DeconzSession, errors
 
-from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_PORT
 from homeassistant.core import callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -34,8 +33,8 @@ from .errors import AuthenticationRequired, CannotConnect
 
 @callback
 def get_gateway_from_config_entry(hass, config_entry):
-    """Return gateway with a matching bridge id."""
-    return hass.data[DECONZ_DOMAIN][config_entry.unique_id]
+    """Return gateway with a matching config entry ID."""
+    return hass.data[DECONZ_DOMAIN][config_entry.entry_id]
 
 
 class DeconzGateway:
@@ -54,7 +53,6 @@ class DeconzGateway:
         self.deconz_ids = {}
         self.entities = {}
         self.events = []
-        self.listeners = []
 
     @property
     def bridgeid(self) -> str:
@@ -153,11 +151,11 @@ class DeconzGateway:
         # Gateway service
         device_registry.async_get_or_create(
             config_entry_id=self.config_entry.entry_id,
-            identifiers={(DECONZ_DOMAIN, self.api.config.bridgeid)},
+            identifiers={(DECONZ_DOMAIN, self.api.config.bridge_id)},
             manufacturer="Dresden Elektronik",
-            model=self.api.config.modelid,
+            model=self.api.config.model_id,
             name=self.api.config.name,
-            sw_version=self.api.config.swversion,
+            sw_version=self.api.config.software_version,
             via_device=(CONNECTION_NETWORK_MAC, self.api.config.mac),
         )
 
@@ -174,22 +172,10 @@ class DeconzGateway:
         except CannotConnect as err:
             raise ConfigEntryNotReady from err
 
-        except AuthenticationRequired:
-            self.hass.async_create_task(
-                self.hass.config_entries.flow.async_init(
-                    DECONZ_DOMAIN,
-                    context={"source": SOURCE_REAUTH},
-                    data=self.config_entry.data,
-                )
-            )
-            return False
+        except AuthenticationRequired as err:
+            raise ConfigEntryAuthFailed from err
 
-        for platform in PLATFORMS:
-            self.hass.async_create_task(
-                self.hass.config_entries.async_forward_entry_setup(
-                    self.config_entry, platform
-                )
-            )
+        self.hass.config_entries.async_setup_platforms(self.config_entry, PLATFORMS)
 
         await async_setup_events(self)
 
@@ -259,14 +245,9 @@ class DeconzGateway:
         self.api.async_connection_status_callback = None
         self.api.close()
 
-        for platform in PLATFORMS:
-            await self.hass.config_entries.async_forward_entry_unload(
-                self.config_entry, platform
-            )
-
-        for unsub_dispatcher in self.listeners:
-            unsub_dispatcher()
-        self.listeners = []
+        await self.hass.config_entries.async_unload_platforms(
+            self.config_entry, PLATFORMS
+        )
 
         async_unload_events(self)
 
@@ -285,12 +266,12 @@ async def get_gateway(
         config[CONF_HOST],
         config[CONF_PORT],
         config[CONF_API_KEY],
-        async_add_device=async_add_device_callback,
+        add_device=async_add_device_callback,
         connection_status=async_connection_status_callback,
     )
     try:
         with async_timeout.timeout(10):
-            await deconz.initialize()
+            await deconz.refresh_state()
         return deconz
 
     except errors.Unauthorized as err:
