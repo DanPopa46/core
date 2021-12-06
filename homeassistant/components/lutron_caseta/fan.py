@@ -2,16 +2,21 @@
 import logging
 from typing import Optional
 
-from pylutron_caseta import FAN_HIGH, FAN_LOW, FAN_MEDIUM, FAN_MEDIUM_HIGH, FAN_OFF
-
-from homeassistant.components.fan import DOMAIN, SUPPORT_SET_SPEED, FanEntity
-from homeassistant.util.percentage import (
-    ordered_list_item_to_percentage,
-    percentage_to_ordered_list_item,
-)
+from pylutron_caseta import FAN_HIGH
+from pylutron_caseta import FAN_LOW
+from pylutron_caseta import FAN_MEDIUM
+from pylutron_caseta import FAN_MEDIUM_HIGH
+from pylutron_caseta import FAN_OFF
 
 from . import LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
+from homeassistant.components.fan import DOMAIN
+from homeassistant.components.fan import FanEntity
+from homeassistant.components.fan import SUPPORT_SET_SPEED
+from homeassistant.util.percentage import ordered_list_item_to_percentage
+from homeassistant.util.percentage import percentage_to_ordered_list_item
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +30,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     Adds fan controllers from the Caseta bridge associated with the config_entry
     as fan entities.
     """
-
     entities = []
     data = hass.data[CASETA_DOMAIN][config_entry.entry_id]
     bridge = data[BRIDGE_LEAP]
@@ -41,7 +45,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaFan(LutronCasetaDevice, FanEntity):
     """Representation of a Lutron Caseta fan. Including Fan Speed."""
-
     @property
     def percentage(self) -> Optional[int]:
         """Return the current speed percentage."""
@@ -49,9 +52,8 @@ class LutronCasetaFan(LutronCasetaDevice, FanEntity):
             return None
         if self._device["fan_speed"] == FAN_OFF:
             return 0
-        return ordered_list_item_to_percentage(
-            ORDERED_NAMED_FAN_SPEEDS, self._device["fan_speed"]
-        )
+        return ordered_list_item_to_percentage(ORDERED_NAMED_FAN_SPEEDS,
+                                               self._device["fan_speed"])
 
     @property
     def speed_count(self) -> int:
@@ -86,8 +88,7 @@ class LutronCasetaFan(LutronCasetaDevice, FanEntity):
             named_speed = FAN_OFF
         else:
             named_speed = percentage_to_ordered_list_item(
-                ORDERED_NAMED_FAN_SPEEDS, percentage
-            )
+                ORDERED_NAMED_FAN_SPEEDS, percentage)
 
         await self._smartbridge.set_fan(self.device_id, named_speed)
 

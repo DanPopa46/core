@@ -1,18 +1,17 @@
 """Support for Lutron Caseta lights."""
-from datetime import timedelta
 import logging
-
-from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    ATTR_TRANSITION,
-    DOMAIN,
-    SUPPORT_BRIGHTNESS,
-    SUPPORT_TRANSITION,
-    LightEntity,
-)
+from datetime import timedelta
 
 from . import LutronCasetaDevice
-from .const import BRIDGE_DEVICE, BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
+from .const import BRIDGE_DEVICE
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
+from homeassistant.components.light import ATTR_BRIGHTNESS
+from homeassistant.components.light import ATTR_TRANSITION
+from homeassistant.components.light import DOMAIN
+from homeassistant.components.light import LightEntity
+from homeassistant.components.light import SUPPORT_BRIGHTNESS
+from homeassistant.components.light import SUPPORT_TRANSITION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +32,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     Adds dimmers from the Caseta bridge associated with the config_entry as
     light entities.
     """
-
     entities = []
     data = hass.data[CASETA_DOMAIN][config_entry.entry_id]
     bridge = data[BRIDGE_LEAP]
@@ -49,7 +47,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaLight(LutronCasetaDevice, LightEntity):
     """Representation of a Lutron Light, including dimmable."""
-
     @property
     def supported_features(self):
         """Flag supported features."""
@@ -65,9 +62,8 @@ class LutronCasetaLight(LutronCasetaDevice, LightEntity):
         if ATTR_TRANSITION in kwargs:
             args["fade_time"] = timedelta(seconds=kwargs[ATTR_TRANSITION])
 
-        await self._smartbridge.set_value(
-            self.device_id, to_lutron_level(brightness), **args
-        )
+        await self._smartbridge.set_value(self.device_id,
+                                          to_lutron_level(brightness), **args)
 
     async def async_turn_on(self, **kwargs):
         """Turn the light on."""

@@ -1,9 +1,9 @@
 """Support for Lutron Caseta scenes."""
 from typing import Any
 
+from .const import BRIDGE_LEAP
+from .const import DOMAIN as CASETA_DOMAIN
 from homeassistant.components.scene import Scene
-
-from .const import BRIDGE_LEAP, DOMAIN as CASETA_DOMAIN
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -12,7 +12,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     Adds scenes from the Caseta bridge associated with the config_entry as
     scene entities.
     """
-
     entities = []
     data = hass.data[CASETA_DOMAIN][config_entry.entry_id]
     bridge = data[BRIDGE_LEAP]
@@ -27,7 +26,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class LutronCasetaScene(Scene):
     """Representation of a Lutron Caseta scene."""
-
     def __init__(self, scene, bridge):
         """Initialize the Lutron Caseta scene."""
         self._scene_name = scene["name"]
