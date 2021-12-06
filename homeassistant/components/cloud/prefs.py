@@ -1,6 +1,5 @@
 """Preference management for cloud."""
-from ipaddress import ip_address
-from typing import List, Optional
+from __future__ import annotations
 
 from homeassistant.auth.const import GROUP_ID_ADMIN
 from homeassistant.auth.models import User
@@ -33,8 +32,6 @@ from .const import (
     PREF_SHOULD_EXPOSE,
     PREF_TTS_DEFAULT_VOICE,
     PREF_USERNAME,
-    InvalidTrustedNetworks,
-    InvalidTrustedProxies,
 )
 
 STORAGE_KEY = DOMAIN
@@ -53,9 +50,7 @@ class CloudPreferences:
 
     async def async_initialize(self):
         """Finish initializing the preferences."""
-        prefs = await self._store.async_load()
-
-        if prefs is None:
+        if (prefs := await self._store.async_load()) is None:
             prefs = self._empty_config("")
 
         self._prefs = prefs
@@ -111,14 +106,6 @@ class CloudPreferences:
             if value is not UNDEFINED:
                 prefs[key] = value
 
-        if remote_enabled is True and self._has_local_trusted_network:
-            prefs[PREF_ENABLE_REMOTE] = False
-            raise InvalidTrustedNetworks
-
-        if remote_enabled is True and self._has_local_trusted_proxies:
-            prefs[PREF_ENABLE_REMOTE] = False
-            raise InvalidTrustedProxies
-
         await self._save_prefs(prefs)
 
     async def async_update_google_entity_config(
@@ -172,7 +159,7 @@ class CloudPreferences:
         updated_entities = {**entities, entity_id: updated_entity}
         await self.async_update(alexa_entity_configs=updated_entities)
 
-    async def async_set_username(self, username):
+    async def async_set_username(self, username) -> bool:
         """Set the username that is logged in."""
         # Logging out.
         if username is None:
@@ -181,17 +168,19 @@ class CloudPreferences:
             if user is not None:
                 await self._hass.auth.async_remove_user(user)
                 await self._save_prefs({**self._prefs, PREF_CLOUD_USER: None})
-            return
+            return False
 
         cur_username = self._prefs.get(PREF_USERNAME)
 
         if cur_username == username:
-            return
+            return False
 
         if cur_username is None:
             await self._save_prefs({**self._prefs, PREF_USERNAME: username})
         else:
             await self._save_prefs(self._empty_config(username))
+
+        return True
 
     def as_dict(self):
         """Return dictionary version."""
@@ -213,12 +202,7 @@ class CloudPreferences:
     @property
     def remote_enabled(self):
         """Return if remote is enabled on start."""
-        enabled = self._prefs.get(PREF_ENABLE_REMOTE, False)
-
-        if not enabled:
-            return False
-
-        if self._has_local_trusted_network or self._has_local_trusted_proxies:
+        if not self._prefs.get(PREF_ENABLE_REMOTE, False):
             return False
 
         return True
@@ -234,7 +218,7 @@ class CloudPreferences:
         return self._prefs.get(PREF_ALEXA_REPORT_STATE, DEFAULT_ALEXA_REPORT_STATE)
 
     @property
-    def alexa_default_expose(self) -> Optional[List[str]]:
+    def alexa_default_expose(self) -> list[str] | None:
         """Return array of entity domains that are exposed by default to Alexa.
 
         Can return None, in which case for backwards should be interpreted as allow all domains.
@@ -272,7 +256,7 @@ class CloudPreferences:
         return self._prefs[PREF_GOOGLE_LOCAL_WEBHOOK_ID]
 
     @property
-    def google_default_expose(self) -> Optional[List[str]]:
+    def google_default_expose(self) -> list[str] | None:
         """Return array of entity domains that are exposed by default to Google.
 
         Can return None, in which case for backwards should be interpreted as allow all domains.
@@ -297,53 +281,20 @@ class CloudPreferences:
             return user.id
 
         user = await self._hass.auth.async_create_system_user(
-            "Home Assistant Cloud", [GROUP_ID_ADMIN]
+            "Home Assistant Cloud", group_ids=[GROUP_ID_ADMIN], local_only=True
         )
+        assert user is not None
         await self.async_update(cloud_user=user.id)
         return user.id
 
-    async def _load_cloud_user(self) -> Optional[User]:
+    async def _load_cloud_user(self) -> User | None:
         """Load cloud user if available."""
-        user_id = self._prefs.get(PREF_CLOUD_USER)
-
-        if user_id is None:
+        if (user_id := self._prefs.get(PREF_CLOUD_USER)) is None:
             return None
 
         # Fetch the user. It can happen that the user no longer exists if
         # an image was restored without restoring the cloud prefs.
         return await self._hass.auth.async_get_user(user_id)
-
-    @property
-    def _has_local_trusted_network(self) -> bool:
-        """Return if we allow localhost to bypass auth."""
-        local4 = ip_address("127.0.0.1")
-        local6 = ip_address("::1")
-
-        for prv in self._hass.auth.auth_providers:
-            if prv.type != "trusted_networks":
-                continue
-
-            for network in prv.trusted_networks:
-                if local4 in network or local6 in network:
-                    return True
-
-        return False
-
-    @property
-    def _has_local_trusted_proxies(self) -> bool:
-        """Return if we allow localhost to be a proxy and use its data."""
-        if not hasattr(self._hass, "http"):
-            return False
-
-        local4 = ip_address("127.0.0.1")
-        local6 = ip_address("::1")
-
-        if any(
-            local4 in nwk or local6 in nwk for nwk in self._hass.http.trusted_proxies
-        ):
-            return True
-
-        return False
 
     async def _save_prefs(self, prefs):
         """Save preferences to disk."""

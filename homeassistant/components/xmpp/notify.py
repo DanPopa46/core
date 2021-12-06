@@ -1,5 +1,6 @@
 """Jabber (XMPP) notification service."""
 from concurrent.futures import TimeoutError as FutTimeoutError
+from http import HTTPStatus
 import logging
 import mimetypes
 import pathlib
@@ -29,7 +30,6 @@ from homeassistant.const import (
     CONF_RESOURCE,
     CONF_ROOM,
     CONF_SENDER,
-    HTTP_BAD_REQUEST,
 )
 import homeassistant.helpers.config_validation as cv
 import homeassistant.helpers.template as template_helper
@@ -113,7 +113,7 @@ class XmppNotificationService(BaseNotificationService):
         )
 
 
-async def async_send_message(
+async def async_send_message(  # noqa: C901
     sender,
     password,
     recipients,
@@ -165,7 +165,7 @@ async def async_send_message(
             if message:
                 self.send_text_message()
 
-            self.disconnect(wait=True)
+            self.disconnect()
 
         async def send_file(self, timeout=None):
             """Send file via XMPP.
@@ -174,7 +174,7 @@ async def async_send_message(
             HTTP Upload (XEP_0363)
             """
             if room:
-                self.plugin["xep_0045"].join_muc(room, sender, wait=True)
+                self.plugin["xep_0045"].join_muc(room, sender)
 
             try:
                 # Uploading with XEP_0363
@@ -190,7 +190,9 @@ async def async_send_message(
                         _LOGGER.info("Sending file to %s", recipient)
                         message = self.Message(sto=recipient, stype="chat")
                     message["body"] = url
-                    message["oob"]["url"] = url
+                    message["oob"][  # pylint: disable=invalid-sequence-index
+                        "url"
+                    ] = url
                     try:
                         message.send()
                     except (IqError, IqTimeout, XMPPError) as ex:
@@ -265,7 +267,7 @@ async def async_send_message(
 
             result = await hass.async_add_executor_job(get_url, url)
 
-            if result.status_code >= HTTP_BAD_REQUEST:
+            if result.status_code >= HTTPStatus.BAD_REQUEST:
                 _LOGGER.error("Could not load file from %s", url)
                 return None
 
@@ -311,8 +313,7 @@ async def async_send_message(
             filesize = len(input_file)
             _LOGGER.debug("Filesize is %s bytes", filesize)
 
-            content_type = mimetypes.guess_type(path)[0]
-            if content_type is None:
+            if (content_type := mimetypes.guess_type(path)[0]) is None:
                 content_type = DEFAULT_CONTENT_TYPE
             _LOGGER.debug("Content type is %s", content_type)
 
@@ -335,7 +336,7 @@ async def async_send_message(
             try:
                 if room:
                     _LOGGER.debug("Joining room %s", room)
-                    self.plugin["xep_0045"].join_muc(room, sender, wait=True)
+                    self.plugin["xep_0045"].join_muc(room, sender)
                     self.send_message(mto=room, mbody=message, mtype="groupchat")
                 else:
                     for recipient in recipients:

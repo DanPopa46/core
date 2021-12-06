@@ -11,14 +11,14 @@ async def async_setup_scanner(hass, config, async_see, discovery_info=None):
     if discovery_info is None:
         return
 
-    vin, component, attr = discovery_info
+    vin, component, attr, slug_attr = discovery_info
     data = hass.data[DATA_KEY]
-    instrument = data.instrument(vin, component, attr)
+    instrument = data.instrument(vin, component, attr, slug_attr)
 
     async def see_vehicle():
         """Handle the reporting of the vehicle position."""
         host_name = instrument.vehicle_name
-        dev_id = "volvo_{}".format(slugify(host_name))
+        dev_id = f"volvo_{slugify(host_name)}"
         await async_see(
             dev_id=dev_id,
             host_name=host_name,

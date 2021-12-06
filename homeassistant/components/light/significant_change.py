@@ -1,11 +1,10 @@
 """Helper to test significant Light state changes."""
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.significant_change import (
-    check_numeric_changed,
-    either_one_none,
-)
+from homeassistant.helpers.significant_change import check_absolute_change
 
 from . import (
     ATTR_BRIGHTNESS,
@@ -24,7 +23,7 @@ def async_check_significant_change(
     new_state: str,
     new_attrs: dict,
     **kwargs: Any,
-) -> Optional[bool]:
+) -> bool | None:
     """Test if state significantly changed."""
     if old_state != new_state:
         return True
@@ -35,24 +34,21 @@ def async_check_significant_change(
     old_color = old_attrs.get(ATTR_HS_COLOR)
     new_color = new_attrs.get(ATTR_HS_COLOR)
 
-    if either_one_none(old_color, new_color):
-        return True
-
     if old_color and new_color:
         # Range 0..360
-        if check_numeric_changed(old_color[0], new_color[0], 5):
+        if check_absolute_change(old_color[0], new_color[0], 5):
             return True
 
         # Range 0..100
-        if check_numeric_changed(old_color[1], new_color[1], 3):
+        if check_absolute_change(old_color[1], new_color[1], 3):
             return True
 
-    if check_numeric_changed(
+    if check_absolute_change(
         old_attrs.get(ATTR_BRIGHTNESS), new_attrs.get(ATTR_BRIGHTNESS), 3
     ):
         return True
 
-    if check_numeric_changed(
+    if check_absolute_change(
         # Default range 153..500
         old_attrs.get(ATTR_COLOR_TEMP),
         new_attrs.get(ATTR_COLOR_TEMP),
@@ -60,7 +56,7 @@ def async_check_significant_change(
     ):
         return True
 
-    if check_numeric_changed(
+    if check_absolute_change(
         # Range 0..255
         old_attrs.get(ATTR_WHITE_VALUE),
         new_attrs.get(ATTR_WHITE_VALUE),

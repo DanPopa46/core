@@ -19,7 +19,7 @@ from homeassistant.components.airvisual.const import (
     INTEGRATION_TYPE_GEOGRAPHY_NAME,
     INTEGRATION_TYPE_NODE_PRO,
 )
-from homeassistant.config_entries import SOURCE_USER
+from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_USER
 from homeassistant.const import (
     CONF_API_KEY,
     CONF_IP_ADDRESS,
@@ -177,10 +177,8 @@ async def test_migration(hass):
         ],
     }
 
-    config_entry = MockConfigEntry(
-        domain=DOMAIN, version=1, unique_id="abcde12345", data=conf
-    )
-    config_entry.add_to_hass(hass)
+    entry = MockConfigEntry(domain=DOMAIN, version=1, unique_id="abcde12345", data=conf)
+    entry.add_to_hass(hass)
 
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
 
@@ -222,19 +220,19 @@ async def test_options_flow(hass):
         CONF_LONGITUDE: -0.3817765,
     }
 
-    config_entry = MockConfigEntry(
+    entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id="51.528308, -0.3817765",
         data=geography_conf,
         options={CONF_SHOW_ON_MAP: True},
     )
-    config_entry.add_to_hass(hass)
+    entry.add_to_hass(hass)
 
     with patch(
         "homeassistant.components.airvisual.async_setup_entry", return_value=True
     ):
-        await hass.config_entries.async_setup(config_entry.entry_id)
-        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        await hass.config_entries.async_setup(entry.entry_id)
+        result = await hass.config_entries.options.async_init(entry.entry_id)
 
         assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
         assert result["step_id"] == "init"
@@ -244,7 +242,7 @@ async def test_options_flow(hass):
         )
 
         assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
-        assert config_entry.options == {CONF_SHOW_ON_MAP: False}
+        assert entry.options == {CONF_SHOW_ON_MAP: False}
 
 
 async def test_step_geography_by_coords(hass):
@@ -349,7 +347,7 @@ async def test_step_reauth(hass):
     ).add_to_hass(hass)
 
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "reauth"}, data=entry_data
+        DOMAIN, context={"source": SOURCE_REAUTH}, data=entry_data
     )
     assert result["step_id"] == "reauth_confirm"
 
@@ -357,16 +355,19 @@ async def test_step_reauth(hass):
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
     assert result["step_id"] == "reauth_confirm"
 
+    new_api_key = "defgh67890"
+
     with patch(
         "homeassistant.components.airvisual.async_setup_entry", return_value=True
     ), patch("pyairvisual.air_quality.AirQuality.nearest_city", return_value=True):
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input={CONF_API_KEY: "defgh67890"}
+            result["flow_id"], user_input={CONF_API_KEY: new_api_key}
         )
         assert result["type"] == data_entry_flow.RESULT_TYPE_ABORT
         assert result["reason"] == "reauth_successful"
 
     assert len(hass.config_entries.async_entries()) == 1
+    assert hass.config_entries.async_entries()[0].data[CONF_API_KEY] == new_api_key
 
 
 async def test_step_user(hass):

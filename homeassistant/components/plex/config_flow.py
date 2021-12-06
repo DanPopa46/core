@@ -10,6 +10,7 @@ import requests.exceptions
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.components import http
 from homeassistant.components.http.view import HomeAssistantView
 from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.const import (
@@ -25,7 +26,6 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.network import get_url
 
 from .const import (
     AUTH_CALLBACK_NAME,
@@ -51,6 +51,8 @@ from .const import (
 )
 from .errors import NoServersFound, ServerNotSpecified
 from .server import PlexServer
+
+HEADER_FRONTEND_BASE = "HA-Frontend-Base"
 
 _LOGGER = logging.getLogger(__package__)
 
@@ -80,7 +82,6 @@ class PlexFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Plex config flow."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_PUSH
 
     @staticmethod
     @callback
@@ -130,8 +131,7 @@ class PlexFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Begin manual configuration."""
         if user_input is not None and errors is None:
             user_input.pop(CONF_URL, None)
-            host = user_input.get(CONF_HOST)
-            if host:
+            if host := user_input.get(CONF_HOST):
                 port = user_input[CONF_PORT]
                 prefix = "https" if user_input.get(CONF_SSL) else "http"
                 user_input[CONF_URL] = f"{prefix}://{host}:{port}"
@@ -286,7 +286,11 @@ class PlexFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_plex_website_auth(self):
         """Begin external auth flow on Plex website."""
         self.hass.http.register_view(PlexAuthorizationCallbackView)
-        hass_url = get_url(self.hass)
+        if (req := http.current_request.get()) is None:
+            raise RuntimeError("No current request in context")
+        if (hass_url := req.headers.get(HEADER_FRONTEND_BASE)) is None:
+            raise RuntimeError("No header in request")
+
         headers = {"Origin": hass_url}
         payload = {
             "X-Plex-Device-Name": X_PLEX_DEVICE_NAME,
@@ -417,6 +421,7 @@ class PlexAuthorizationCallbackView(HomeAssistantView):
 
     async def get(self, request):
         """Receive authorization confirmation."""
+        # pylint: disable=no-self-use
         hass = request.app["hass"]
         await hass.config_entries.flow.async_configure(
             flow_id=request.query["flow_id"], user_input=None

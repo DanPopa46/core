@@ -18,7 +18,6 @@ from homeassistant.components.water_heater import (
     SUPPORT_TARGET_TEMPERATURE,
     WaterHeaterEntity,
 )
-from homeassistant.const import TEMP_FAHRENHEIT
 from homeassistant.core import callback
 
 from . import EcoNetEntity
@@ -78,11 +77,6 @@ class EcoNetWaterHeater(EcoNetEntity, WaterHeaterEntity):
         return self._econet.away
 
     @property
-    def temperature_unit(self):
-        """Return the unit of measurement."""
-        return TEMP_FAHRENHEIT
-
-    @property
     def current_operation(self):
         """Return current operation."""
         econet_mode = self.water_heater.mode
@@ -119,8 +113,7 @@ class EcoNetWaterHeater(EcoNetEntity, WaterHeaterEntity):
 
     def set_temperature(self, **kwargs):
         """Set new target temperature."""
-        target_temp = kwargs.get(ATTR_TEMPERATURE)
-        if target_temp is not None:
+        if (target_temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
             self.water_heater.set_set_point(target_temp)
         else:
             _LOGGER.error("A target temperature must be provided")
@@ -160,6 +153,7 @@ class EcoNetWaterHeater(EcoNetEntity, WaterHeaterEntity):
         """Get the latest energy usage."""
         await self.water_heater.get_energy_usage()
         await self.water_heater.get_water_usage()
+        self.async_write_ha_state()
         self._poll = False
 
     def turn_away_mode_on(self):

@@ -1,8 +1,8 @@
-"""Config flow for UniFi.
+"""Config flow for UniFi Network integration.
 
 Provides user initiated configuration flow.
-Discovery of controllers hosted on UDM and UDM Pro devices through SSDP.
-Reauthentication when issue with credentials are reported.
+Discovery of UniFi Network instances hosted on UDM and UDM Pro devices
+through SSDP. Reauthentication when issue with credentials are reported.
 Configuration of options through options flow.
 """
 import socket
@@ -20,6 +20,7 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.device_registry import format_mac
 
@@ -56,10 +57,9 @@ MODEL_PORTS = {
 
 
 class UnifiFlowHandler(config_entries.ConfigFlow, domain=UNIFI_DOMAIN):
-    """Handle a UniFi config flow."""
+    """Handle a UniFi Network config flow."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     @staticmethod
     @callback
@@ -68,7 +68,7 @@ class UnifiFlowHandler(config_entries.ConfigFlow, domain=UNIFI_DOMAIN):
         return UnifiOptionsFlowHandler(config_entry)
 
     def __init__(self):
-        """Initialize the UniFi flow."""
+        """Initialize the UniFi Network flow."""
         self.config = {}
         self.site_ids = {}
         self.site_names = {}
@@ -192,8 +192,11 @@ class UnifiFlowHandler(config_entries.ConfigFlow, domain=UNIFI_DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(self, config_entry: dict):
+    async def async_step_reauth(self, data: dict):
         """Trigger a reauthentication flow."""
+        config_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
         self.reauth_config_entry = config_entry
 
         self.context["title_placeholders"] = {
@@ -213,18 +216,17 @@ class UnifiFlowHandler(config_entries.ConfigFlow, domain=UNIFI_DOMAIN):
 
         return await self.async_step_user()
 
-    async def async_step_ssdp(self, discovery_info):
+    async def async_step_ssdp(self, discovery_info: ssdp.SsdpServiceInfo) -> FlowResult:
         """Handle a discovered UniFi device."""
-        parsed_url = urlparse(discovery_info[ssdp.ATTR_SSDP_LOCATION])
-        model_description = discovery_info[ssdp.ATTR_UPNP_MODEL_DESCRIPTION]
-        mac_address = format_mac(discovery_info[ssdp.ATTR_UPNP_SERIAL])
+        parsed_url = urlparse(discovery_info.ssdp_location)
+        model_description = discovery_info.upnp[ssdp.ATTR_UPNP_MODEL_DESCRIPTION]
+        mac_address = format_mac(discovery_info.upnp[ssdp.ATTR_UPNP_SERIAL])
 
         self.config = {
             CONF_HOST: parsed_url.hostname,
         }
 
-        if self._host_already_configured(self.config[CONF_HOST]):
-            return self.async_abort(reason="already_configured")
+        self._async_abort_entries_match({CONF_HOST: self.config[CONF_HOST]})
 
         await self.async_set_unique_id(mac_address)
         self._abort_if_unique_id_configured(updates=self.config)
@@ -234,31 +236,23 @@ class UnifiFlowHandler(config_entries.ConfigFlow, domain=UNIFI_DOMAIN):
             CONF_SITE_ID: DEFAULT_SITE_ID,
         }
 
-        port = MODEL_PORTS.get(model_description)
-        if port is not None:
+        if (port := MODEL_PORTS.get(model_description)) is not None:
             self.config[CONF_PORT] = port
 
         return await self.async_step_user()
 
-    def _host_already_configured(self, host):
-        """See if we already have a UniFi entry matching the host."""
-        for entry in self._async_current_entries():
-            if entry.data.get(CONF_HOST) == host:
-                return True
-        return False
-
 
 class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle Unifi options."""
+    """Handle Unifi Network options."""
 
     def __init__(self, config_entry):
-        """Initialize UniFi options flow."""
+        """Initialize UniFi Network options flow."""
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
         self.controller = None
 
     async def async_step_init(self, user_input=None):
-        """Manage the UniFi options."""
+        """Manage the UniFi Network options."""
         self.controller = self.hass.data[UNIFI_DOMAIN][self.config_entry.entry_id]
         self.options[CONF_BLOCK_CLIENT] = self.controller.option_block_clients
 
@@ -297,6 +291,7 @@ class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
                     ): cv.multi_select(clients_to_block),
                 }
             ),
+            last_step=True,
         )
 
     async def async_step_device_tracker(self, user_input=None):
@@ -319,7 +314,7 @@ class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
                 if "name" in wlan
             }
         )
-        ssid_filter = {ssid: ssid for ssid in sorted(list(ssids))}
+        ssid_filter = {ssid: ssid for ssid in sorted(ssids)}
 
         return self.async_show_form(
             step_id="device_tracker",
@@ -352,6 +347,7 @@ class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
                     ): bool,
                 }
             ),
+            last_step=False,
         )
 
     async def async_step_client_control(self, user_input=None):
@@ -389,6 +385,7 @@ class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
+            last_step=False,
         )
 
     async def async_step_statistics_sensors(self, user_input=None):
@@ -411,6 +408,7 @@ class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
                     ): bool,
                 }
             ),
+            last_step=True,
         )
 
     async def _update_options(self):
@@ -419,7 +417,7 @@ class UnifiOptionsFlowHandler(config_entries.OptionsFlow):
 
 
 async def async_discover_unifi(hass):
-    """Discover UniFi address."""
+    """Discover UniFi Network address."""
     try:
         return await hass.async_add_executor_job(socket.gethostbyname, "unifi")
     except socket.gaierror:

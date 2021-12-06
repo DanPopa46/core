@@ -35,8 +35,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
     dev = []
     for node in nodes:
-        node_id = linode.get_node_id(node)
-        if node_id is None:
+        if (node_id := linode.get_node_id(node)) is None:
             _LOGGER.error("Node %s is not available", node)
             return
         dev.append(LinodeSwitch(linode, node_id))
@@ -47,7 +46,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 class LinodeSwitch(SwitchEntity):
     """Representation of a Linode Node switch."""
 
-    def __init__(self, li, node_id):
+    def __init__(self, li, node_id):  # pylint: disable=invalid-name
         """Initialize a new Linode sensor."""
         self._linode = li
         self._node_id = node_id
@@ -67,7 +66,7 @@ class LinodeSwitch(SwitchEntity):
         return self._state
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes of the Linode Node."""
         return self._attrs
 

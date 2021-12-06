@@ -1,19 +1,20 @@
 """Support for Huawei LTE switches."""
+from __future__ import annotations
 
 import logging
-from typing import Any, Callable, List, Optional
+from typing import Any
 
 import attr
 
 from homeassistant.components.switch import (
-    DEVICE_CLASS_SWITCH,
     DOMAIN as SWITCH_DOMAIN,
+    SwitchDeviceClass,
     SwitchEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_URL
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.typing import HomeAssistantType
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import HuaweiLteBaseEntity
 from .const import DOMAIN, KEY_DIALUP_MOBILE_DATASWITCH
@@ -22,13 +23,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistantType,
+    hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: Callable[[List[Entity], bool], None],
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up from config entry."""
-    router = hass.data[DOMAIN].routers[config_entry.data[CONF_URL]]
-    switches: List[Entity] = []
+    router = hass.data[DOMAIN].routers[config_entry.unique_id]
+    switches: list[Entity] = []
 
     if router.data.get(KEY_DIALUP_MOBILE_DATASWITCH):
         switches.append(HuaweiLteMobileDataSwitch(router))
@@ -42,7 +43,8 @@ class HuaweiLteBaseSwitch(HuaweiLteBaseEntity, SwitchEntity):
 
     key: str
     item: str
-    _raw_state: Optional[str] = attr.ib(init=False, default=None)
+    _attr_device_class = SwitchDeviceClass.SWITCH
+    _raw_state: str | None = attr.ib(init=False, default=None)
 
     def _turn(self, state: bool) -> None:
         raise NotImplementedError
@@ -54,11 +56,6 @@ class HuaweiLteBaseSwitch(HuaweiLteBaseEntity, SwitchEntity):
     def turn_off(self, **kwargs: Any) -> None:
         """Turn switch off."""
         self._turn(state=False)
-
-    @property
-    def device_class(self) -> str:
-        """Return device class."""
-        return DEVICE_CLASS_SWITCH
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to needed data on add."""

@@ -6,7 +6,18 @@
         },
         "step": {
             "user": {
-                "description": "Wil je beginnen met instellen?"
+                "description": "Wilt u beginnen met instellen?"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "manual": "Automatische updaten uitschakelen",
+                    "scan_interval": "Update frequentie (minuten)",
+                    "server_name": "Selecteer testserver"
+                }
             }
         }
     }

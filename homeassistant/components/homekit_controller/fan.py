@@ -80,6 +80,14 @@ class BaseHomeKitFan(HomeKitEntity, FanEntity):
 
         return features
 
+    @property
+    def speed_count(self):
+        """Speed count for the fan."""
+        return round(
+            min(self.service[CharacteristicsTypes.ROTATION_SPEED].maxValue or 100, 100)
+            / max(1, self.service[CharacteristicsTypes.ROTATION_SPEED].minStep or 0)
+        )
+
     async def async_set_direction(self, direction):
         """Set the direction of the fan."""
         await self.async_put_characteristics(
@@ -110,7 +118,7 @@ class BaseHomeKitFan(HomeKitEntity, FanEntity):
         if not self.is_on:
             characteristics[self.on_characteristic] = True
 
-        if self.supported_features & SUPPORT_SET_SPEED:
+        if percentage is not None and self.supported_features & SUPPORT_SET_SPEED:
             characteristics[CharacteristicsTypes.ROTATION_SPEED] = percentage
 
         if characteristics:
@@ -146,8 +154,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     @callback
     def async_add_service(service):
-        entity_class = ENTITY_TYPES.get(service.short_type)
-        if not entity_class:
+        if not (entity_class := ENTITY_TYPES.get(service.short_type)):
             return False
         info = {"aid": service.accessory.aid, "iid": service.iid}
         async_add_entities([entity_class(conn, info)], True)

@@ -1,6 +1,7 @@
 """Battery Charge and Range Support for the Nissan Leaf."""
 import logging
 
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import DEVICE_CLASS_BATTERY, PERCENTAGE
 from homeassistant.helpers.icon import icon_for_battery_level
 from homeassistant.util.distance import LENGTH_KILOMETERS, LENGTH_MILES
@@ -35,7 +36,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     add_devices(devices, True)
 
 
-class LeafBatterySensor(LeafEntity):
+class LeafBatterySensor(LeafEntity, SensorEntity):
     """Nissan Leaf Battery Sensor."""
 
     @property
@@ -49,12 +50,14 @@ class LeafBatterySensor(LeafEntity):
         return DEVICE_CLASS_BATTERY
 
     @property
-    def state(self):
+    def native_value(self):
         """Battery state percentage."""
+        if self.car.data[DATA_BATTERY] is None:
+            return None
         return round(self.car.data[DATA_BATTERY])
 
     @property
-    def unit_of_measurement(self):
+    def native_unit_of_measurement(self):
         """Battery state measured in percentage."""
         return PERCENTAGE
 
@@ -65,7 +68,7 @@ class LeafBatterySensor(LeafEntity):
         return icon_for_battery_level(battery_level=self.state, charging=chargestate)
 
 
-class LeafRangeSensor(LeafEntity):
+class LeafRangeSensor(LeafEntity, SensorEntity):
     """Nissan Leaf Range Sensor."""
 
     def __init__(self, car, ac_on):
@@ -88,12 +91,15 @@ class LeafRangeSensor(LeafEntity):
         )
 
     @property
-    def state(self):
+    def native_value(self):
         """Battery range in miles or kms."""
         if self._ac_on:
             ret = self.car.data[DATA_RANGE_AC]
         else:
             ret = self.car.data[DATA_RANGE_AC_OFF]
+
+        if ret is None:
+            return None
 
         if not self.car.hass.config.units.is_metric or self.car.force_miles:
             ret = IMPERIAL_SYSTEM.length(ret, METRIC_SYSTEM.length_unit)
@@ -101,7 +107,7 @@ class LeafRangeSensor(LeafEntity):
         return round(ret)
 
     @property
-    def unit_of_measurement(self):
+    def native_unit_of_measurement(self):
         """Battery range unit."""
         if not self.car.hass.config.units.is_metric or self.car.force_miles:
             return LENGTH_MILES

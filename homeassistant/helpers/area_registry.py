@@ -1,15 +1,18 @@
 """Provide a way to connect devices to one physical location."""
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Container, Dict, Iterable, List, MutableMapping, Optional, cast
+from collections.abc import Container, Iterable, MutableMapping
+from typing import cast
 
 import attr
 
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.loader import bind_hass
 from homeassistant.util import slugify
 
-from .typing import HomeAssistantType
+from .typing import UNDEFINED, UndefinedType
 
 # mypy: disallow-any-generics
 
@@ -26,7 +29,8 @@ class AreaEntry:
 
     name: str = attr.ib()
     normalized_name: str = attr.ib()
-    id: Optional[str] = attr.ib(default=None)
+    picture: str | None = attr.ib(default=None)
+    id: str | None = attr.ib(default=None)
 
     def generate_id(self, existing_ids: Container[str]) -> None:
         """Initialize ID."""
@@ -41,20 +45,22 @@ class AreaEntry:
 class AreaRegistry:
     """Class to hold a registry of areas."""
 
-    def __init__(self, hass: HomeAssistantType) -> None:
+    def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the area registry."""
         self.hass = hass
         self.areas: MutableMapping[str, AreaEntry] = {}
-        self._store = hass.helpers.storage.Store(STORAGE_VERSION, STORAGE_KEY)
-        self._normalized_name_area_idx: Dict[str, str] = {}
+        self._store = hass.helpers.storage.Store(
+            STORAGE_VERSION, STORAGE_KEY, atomic_writes=True
+        )
+        self._normalized_name_area_idx: dict[str, str] = {}
 
     @callback
-    def async_get_area(self, area_id: str) -> Optional[AreaEntry]:
+    def async_get_area(self, area_id: str) -> AreaEntry | None:
         """Get area by id."""
         return self.areas.get(area_id)
 
     @callback
-    def async_get_area_by_name(self, name: str) -> Optional[AreaEntry]:
+    def async_get_area_by_name(self, name: str) -> AreaEntry | None:
         """Get area by name."""
         normalized_name = normalize_area_name(name)
         if normalized_name not in self._normalized_name_area_idx:
@@ -69,20 +75,19 @@ class AreaRegistry:
     @callback
     def async_get_or_create(self, name: str) -> AreaEntry:
         """Get or create an area."""
-        area = self.async_get_area_by_name(name)
-        if area:
+        if area := self.async_get_area_by_name(name):
             return area
         return self.async_create(name)
 
     @callback
-    def async_create(self, name: str) -> AreaEntry:
+    def async_create(self, name: str, picture: str | None = None) -> AreaEntry:
         """Create a new area."""
         normalized_name = normalize_area_name(name)
 
         if self.async_get_area_by_name(name):
             raise ValueError(f"The name {name} ({normalized_name}) is already in use")
 
-        area = AreaEntry(name=name, normalized_name=normalized_name)
+        area = AreaEntry(name=name, normalized_name=normalized_name, picture=picture)
         area.generate_id(self.areas)
         assert area.id is not None
         self.areas[area.id] = area
@@ -112,39 +117,57 @@ class AreaRegistry:
         self.async_schedule_save()
 
     @callback
-    def async_update(self, area_id: str, name: str) -> AreaEntry:
+    def async_update(
+        self,
+        area_id: str,
+        name: str | UndefinedType = UNDEFINED,
+        picture: str | None | UndefinedType = UNDEFINED,
+    ) -> AreaEntry:
         """Update name of area."""
-        updated = self._async_update(area_id, name)
+        updated = self._async_update(area_id, name=name, picture=picture)
         self.hass.bus.async_fire(
             EVENT_AREA_REGISTRY_UPDATED, {"action": "update", "area_id": area_id}
         )
         return updated
 
     @callback
-    def _async_update(self, area_id: str, name: str) -> AreaEntry:
+    def _async_update(
+        self,
+        area_id: str,
+        name: str | UndefinedType = UNDEFINED,
+        picture: str | None | UndefinedType = UNDEFINED,
+    ) -> AreaEntry:
         """Update name of area."""
         old = self.areas[area_id]
 
         changes = {}
 
-        if name == old.name:
-            return old
+        if picture is not UNDEFINED:
+            changes["picture"] = picture
 
-        normalized_name = normalize_area_name(name)
+        normalized_name = None
 
-        if normalized_name != old.normalized_name:
-            if self.async_get_area_by_name(name):
+        if name is not UNDEFINED:
+            normalized_name = normalize_area_name(name)
+
+            if normalized_name != old.normalized_name and self.async_get_area_by_name(
+                name
+            ):
                 raise ValueError(
                     f"The name {name} ({normalized_name}) is already in use"
                 )
 
-        changes["name"] = name
-        changes["normalized_name"] = normalized_name
+            changes["name"] = name
+            changes["normalized_name"] = normalized_name
+
+        if not changes:
+            return old
 
         new = self.areas[area_id] = attr.evolve(old, **changes)
-        self._normalized_name_area_idx[
-            normalized_name
-        ] = self._normalized_name_area_idx.pop(old.normalized_name)
+        if normalized_name is not None:
+            self._normalized_name_area_idx[
+                normalized_name
+            ] = self._normalized_name_area_idx.pop(old.normalized_name)
 
         self.async_schedule_save()
         return new
@@ -159,7 +182,11 @@ class AreaRegistry:
             for area in data["areas"]:
                 normalized_name = normalize_area_name(area["name"])
                 areas[area["id"]] = AreaEntry(
-                    name=area["name"], id=area["id"], normalized_name=normalized_name
+                    name=area["name"],
+                    id=area["id"],
+                    # New in 2021.11
+                    picture=area.get("picture"),
+                    normalized_name=normalized_name,
                 )
                 self._normalized_name_area_idx[normalized_name] = area["id"]
 
@@ -171,15 +198,12 @@ class AreaRegistry:
         self._store.async_delay_save(self._data_to_save, SAVE_DELAY)
 
     @callback
-    def _data_to_save(self) -> Dict[str, List[Dict[str, Optional[str]]]]:
+    def _data_to_save(self) -> dict[str, list[dict[str, str | None]]]:
         """Return data of area registry to store in a file."""
         data = {}
 
         data["areas"] = [
-            {
-                "name": entry.name,
-                "id": entry.id,
-            }
+            {"name": entry.name, "id": entry.id, "picture": entry.picture}
             for entry in self.areas.values()
         ]
 
@@ -187,12 +211,12 @@ class AreaRegistry:
 
 
 @callback
-def async_get(hass: HomeAssistantType) -> AreaRegistry:
+def async_get(hass: HomeAssistant) -> AreaRegistry:
     """Get area registry."""
     return cast(AreaRegistry, hass.data[DATA_REGISTRY])
 
 
-async def async_load(hass: HomeAssistantType) -> None:
+async def async_load(hass: HomeAssistant) -> None:
     """Load area registry."""
     assert DATA_REGISTRY not in hass.data
     hass.data[DATA_REGISTRY] = AreaRegistry(hass)
@@ -200,7 +224,7 @@ async def async_load(hass: HomeAssistantType) -> None:
 
 
 @bind_hass
-async def async_get_registry(hass: HomeAssistantType) -> AreaRegistry:
+async def async_get_registry(hass: HomeAssistant) -> AreaRegistry:
     """Get area registry.
 
     This is deprecated and will be removed in the future. Use async_get instead.

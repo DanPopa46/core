@@ -2,96 +2,90 @@
 from __future__ import annotations
 
 import asyncio
-from ipaddress import IPv4Address
-from typing import List, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
-from async_upnp_client import UpnpFactory
+from async_upnp_client import UpnpDevice, UpnpFactory
 from async_upnp_client.aiohttp import AiohttpSessionRequester
+from async_upnp_client.exceptions import UpnpError
 from async_upnp_client.profiles.igd import IgdDevice
 
+from homeassistant.components import ssdp
+from homeassistant.components.ssdp import SsdpChange
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.typing import HomeAssistantType
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
 from .const import (
     BYTES_RECEIVED,
     BYTES_SENT,
-    CONF_LOCAL_IP,
-    DISCOVERY_HOSTNAME,
-    DISCOVERY_LOCATION,
-    DISCOVERY_NAME,
-    DISCOVERY_ST,
-    DISCOVERY_UDN,
-    DISCOVERY_UNIQUE_ID,
-    DISCOVERY_USN,
-    DOMAIN,
-    DOMAIN_CONFIG,
     LOGGER as _LOGGER,
     PACKETS_RECEIVED,
     PACKETS_SENT,
+    ROUTER_IP,
+    ROUTER_UPTIME,
     TIMESTAMP,
+    WAN_STATUS,
 )
 
 
 class Device:
     """Home Assistant representation of a UPnP/IGD device."""
 
-    def __init__(self, igd_device):
+    def __init__(self, hass: HomeAssistant, igd_device: IgdDevice) -> None:
         """Initialize UPnP/IGD device."""
-        self._igd_device: IgdDevice = igd_device
+        self.hass = hass
+        self._igd_device = igd_device
+        self.coordinator: DataUpdateCoordinator = None
 
     @classmethod
-    async def async_discover(cls, hass: HomeAssistantType) -> List[Mapping]:
-        """Discover UPnP/IGD devices."""
-        _LOGGER.debug("Discovering UPnP/IGD devices")
-        local_ip = None
-        if DOMAIN in hass.data and DOMAIN_CONFIG in hass.data[DOMAIN]:
-            local_ip = hass.data[DOMAIN][DOMAIN_CONFIG].get(CONF_LOCAL_IP)
-        if local_ip:
-            local_ip = IPv4Address(local_ip)
+    async def async_create_upnp_device(
+        cls, hass: HomeAssistant, ssdp_location: str
+    ) -> UpnpDevice:
+        """Create UPnP device."""
+        # Build async_upnp_client requester.
+        session = async_get_clientsession(hass)
+        requester = AiohttpSessionRequester(session, True, 20)
 
-        discoveries = await IgdDevice.async_search(source_ip=local_ip, timeout=10)
-
-        # Supplement/standardize discovery.
-        for discovery in discoveries:
-            discovery[DISCOVERY_UDN] = discovery["_udn"]
-            discovery[DISCOVERY_ST] = discovery["st"]
-            discovery[DISCOVERY_LOCATION] = discovery["location"]
-            discovery[DISCOVERY_USN] = discovery["usn"]
-            _LOGGER.debug("Discovered device: %s", discovery)
-
-        return discoveries
-
-    @classmethod
-    async def async_supplement_discovery(
-        cls, hass: HomeAssistantType, discovery: Mapping
-    ) -> Mapping:
-        """Get additional data from device and supplement discovery."""
-        location = discovery[DISCOVERY_LOCATION]
-        device = await Device.async_create_device(hass, location)
-        discovery[DISCOVERY_NAME] = device.name
-        discovery[DISCOVERY_HOSTNAME] = device.hostname
-        discovery[DISCOVERY_UNIQUE_ID] = discovery[DISCOVERY_USN]
-
-        return discovery
+        # Create async_upnp_client device.
+        factory = UpnpFactory(requester, disable_state_variable_validation=True)
+        return await factory.async_create_device(ssdp_location)
 
     @classmethod
     async def async_create_device(
-        cls, hass: HomeAssistantType, ssdp_location: str
+        cls, hass: HomeAssistant, ssdp_location: str
     ) -> Device:
         """Create UPnP/IGD device."""
-        # build async_upnp_client requester
-        session = async_get_clientsession(hass)
-        requester = AiohttpSessionRequester(session, True, 10)
+        upnp_device = await Device.async_create_upnp_device(hass, ssdp_location)
 
-        # create async_upnp_client device
-        factory = UpnpFactory(requester, disable_state_variable_validation=True)
-        upnp_device = await factory.async_create_device(ssdp_location)
-
+        # Create profile wrapper.
         igd_device = IgdDevice(upnp_device, None)
+        device = cls(hass, igd_device)
 
-        return cls(igd_device)
+        # Register SSDP callback for updates.
+        usn = f"{upnp_device.udn}::{upnp_device.device_type}"
+        await ssdp.async_register_callback(
+            hass, device.async_ssdp_callback, {ssdp.ATTR_SSDP_USN: usn}
+        )
+
+        return device
+
+    async def async_ssdp_callback(
+        self, headers: Mapping[str, Any], change: SsdpChange
+    ) -> None:
+        """SSDP callback, update if needed."""
+        if change != SsdpChange.UPDATE or ssdp.ATTR_SSDP_LOCATION not in headers:
+            return
+
+        location = headers[ssdp.ATTR_SSDP_LOCATION]
+        device = self._igd_device.device
+        if location == device.device_url:
+            return
+
+        new_upnp_device = Device.async_create_upnp_device(self.hass, location)
+        device.reinit(new_upnp_device)
 
     @property
     def udn(self) -> str:
@@ -139,7 +133,7 @@ class Device:
         """Get string representation."""
         return f"IGD Device: {self.name}/{self.udn}::{self.device_type}"
 
-    async def async_get_traffic_data(self) -> Mapping[str, any]:
+    async def async_get_traffic_data(self) -> Mapping[str, Any]:
         """
         Get all traffic data in one go.
 
@@ -166,4 +160,38 @@ class Device:
             BYTES_SENT: values[1],
             PACKETS_RECEIVED: values[2],
             PACKETS_SENT: values[3],
+        }
+
+    async def async_get_status(self) -> Mapping[str, Any]:
+        """Get connection status, uptime, and external IP."""
+        _LOGGER.debug("Getting status for device: %s", self)
+
+        values = await asyncio.gather(
+            self._igd_device.async_get_status_info(),
+            self._igd_device.async_get_external_ip_address(),
+            return_exceptions=True,
+        )
+        result = []
+        for idx, value in enumerate(values):
+            if isinstance(value, UpnpError):
+                # Not all routers support some of these items although based
+                # on defined standard they should.
+                _LOGGER.debug(
+                    "Exception occurred while trying to get status %s for device %s: %s",
+                    "status" if idx == 1 else "external IP address",
+                    self,
+                    str(value),
+                )
+                result.append(None)
+                continue
+
+            if isinstance(value, Exception):
+                raise value
+
+            result.append(value)
+
+        return {
+            WAN_STATUS: result[0][0] if result[0] is not None else None,
+            ROUTER_UPTIME: result[0][2] if result[0] is not None else None,
+            ROUTER_IP: result[1],
         }

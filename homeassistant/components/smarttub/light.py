@@ -1,6 +1,4 @@
 """Platform for light integration."""
-import logging
-
 from smarttub import SpaLight
 
 from homeassistant.components.light import (
@@ -13,6 +11,7 @@ from homeassistant.components.light import (
 )
 
 from .const import (
+    ATTR_LIGHTS,
     DEFAULT_LIGHT_BRIGHTNESS,
     DEFAULT_LIGHT_EFFECT,
     DOMAIN,
@@ -20,8 +19,6 @@ from .const import (
 )
 from .entity import SmartTubEntity
 from .helpers import get_spa_name
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -32,7 +29,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = [
         SmartTubLight(controller.coordinator, light)
         for spa in controller.spas
-        for light in await spa.get_lights()
+        for light in controller.coordinator.data[spa.id][ATTR_LIGHTS].values()
     ]
 
     async_add_entities(entities)
@@ -49,7 +46,7 @@ class SmartTubLight(SmartTubEntity, LightEntity):
     @property
     def light(self) -> SpaLight:
         """Return the underlying SpaLight object for this entity."""
-        return self.coordinator.data[self.spa.id]["lights"][self.light_zone]
+        return self.coordinator.data[self.spa.id][ATTR_LIGHTS][self.light_zone]
 
     @property
     def unique_id(self) -> str:

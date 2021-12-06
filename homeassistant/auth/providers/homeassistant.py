@@ -3,25 +3,28 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections import OrderedDict
+from collections.abc import Mapping
 import logging
-from typing import Any, Dict, List, Optional, Set, cast
+from typing import Any, cast
 
 import bcrypt
 import voluptuous as vol
 
 from homeassistant.const import CONF_ID
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from . import AUTH_PROVIDER_SCHEMA, AUTH_PROVIDERS, AuthProvider, LoginFlow
 from ..models import Credentials, UserMeta
 
+# mypy: disallow-any-generics
+
 STORAGE_VERSION = 1
 STORAGE_KEY = "auth_provider.homeassistant"
 
 
-def _disallow_id(conf: Dict[str, Any]) -> Dict[str, Any]:
+def _disallow_id(conf: dict[str, Any]) -> dict[str, Any]:
     """Disallow ID in config."""
     if CONF_ID in conf:
         raise vol.Invalid("ID is not allowed for the homeassistant auth provider.")
@@ -60,9 +63,9 @@ class Data:
         """Initialize the user data store."""
         self.hass = hass
         self._store = hass.helpers.storage.Store(
-            STORAGE_VERSION, STORAGE_KEY, private=True
+            STORAGE_VERSION, STORAGE_KEY, private=True, atomic_writes=True
         )
-        self._data: Optional[Dict[str, Any]] = None
+        self._data: dict[str, Any] | None = None
         # Legacy mode will allow usernames to start/end with whitespace
         # and will compare usernames case-insensitive.
         # Remove in 2020 or when we launch 1.0.
@@ -78,20 +81,16 @@ class Data:
 
     async def async_load(self) -> None:
         """Load stored data."""
-        data = await self._store.async_load()
-
-        if data is None:
+        if (data := await self._store.async_load()) is None:
             data = {"users": []}
 
-        seen: Set[str] = set()
+        seen: set[str] = set()
 
         for user in data["users"]:
             username = user["username"]
 
             # check if we have duplicates
-            folded = username.casefold()
-
-            if folded in seen:
+            if (folded := username.casefold()) in seen:
                 self.is_legacy = True
 
                 logging.getLogger(__name__).warning(
@@ -121,7 +120,7 @@ class Data:
         self._data = data
 
     @property
-    def users(self) -> List[Dict[str, str]]:
+    def users(self) -> list[dict[str, str]]:
         """Return users."""
         return self._data["users"]  # type: ignore
 
@@ -220,7 +219,7 @@ class HassAuthProvider(AuthProvider):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize an Home Assistant auth provider."""
         super().__init__(*args, **kwargs)
-        self.data: Optional[Data] = None
+        self.data: Data | None = None
         self._init_lock = asyncio.Lock()
 
     async def async_initialize(self) -> None:
@@ -233,7 +232,7 @@ class HassAuthProvider(AuthProvider):
             await data.async_load()
             self.data = data
 
-    async def async_login_flow(self, context: Optional[Dict]) -> LoginFlow:
+    async def async_login_flow(self, context: dict[str, Any] | None) -> LoginFlow:
         """Return a flow to login."""
         return HassLoginFlow(self)
 
@@ -277,7 +276,7 @@ class HassAuthProvider(AuthProvider):
         await self.data.async_save()
 
     async def async_get_or_create_credentials(
-        self, flow_result: Dict[str, str]
+        self, flow_result: Mapping[str, str]
     ) -> Credentials:
         """Get credentials based on the flow result."""
         if self.data is None:
@@ -318,8 +317,8 @@ class HassLoginFlow(LoginFlow):
     """Handler for the login flow."""
 
     async def async_step_init(
-        self, user_input: Optional[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
+        self, user_input: dict[str, str] | None = None
+    ) -> FlowResult:
         """Handle the step of the form."""
         errors = {}
 
@@ -335,10 +334,13 @@ class HassLoginFlow(LoginFlow):
                 user_input.pop("password")
                 return await self.async_finish(user_input)
 
-        schema: Dict[str, type] = OrderedDict()
-        schema["username"] = str
-        schema["password"] = str
-
         return self.async_show_form(
-            step_id="init", data_schema=vol.Schema(schema), errors=errors
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("username"): str,
+                    vol.Required("password"): str,
+                }
+            ),
+            errors=errors,
         )

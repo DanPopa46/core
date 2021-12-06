@@ -1,5 +1,5 @@
 """Provides device actions for Number."""
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
 
 import voluptuous as vol
 
@@ -13,6 +13,7 @@ from homeassistant.const import (
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import entity_registry
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.typing import ConfigType
 
 from . import DOMAIN, const
 
@@ -27,10 +28,12 @@ ACTION_SCHEMA = cv.DEVICE_ACTION_BASE_SCHEMA.extend(
 )
 
 
-async def async_get_actions(hass: HomeAssistant, device_id: str) -> List[dict]:
+async def async_get_actions(
+    hass: HomeAssistant, device_id: str
+) -> list[dict[str, str]]:
     """List device actions for Number."""
     registry = await entity_registry.async_get_registry(hass)
-    actions: List[Dict[str, Any]] = []
+    actions: list[dict[str, str]] = []
 
     # Get all the integrations entities for this device
     for entry in entity_registry.async_entries_for_device(registry, device_id):
@@ -50,14 +53,9 @@ async def async_get_actions(hass: HomeAssistant, device_id: str) -> List[dict]:
 
 
 async def async_call_action_from_config(
-    hass: HomeAssistant, config: dict, variables: dict, context: Optional[Context]
+    hass: HomeAssistant, config: dict, variables: dict, context: Context | None
 ) -> None:
     """Execute a device action."""
-    config = ACTION_SCHEMA(config)
-
-    if config[CONF_TYPE] != ATYP_SET_VALUE:
-        return
-
     await hass.services.async_call(
         DOMAIN,
         const.SERVICE_SET_VALUE,
@@ -70,13 +68,10 @@ async def async_call_action_from_config(
     )
 
 
-async def async_get_action_capabilities(hass: HomeAssistant, config: dict) -> dict:
+async def async_get_action_capabilities(
+    hass: HomeAssistant, config: ConfigType
+) -> dict[str, vol.Schema]:
     """List action capabilities."""
-    action_type = config[CONF_TYPE]
-
-    if action_type != ATYP_SET_VALUE:
-        return {}
-
     fields = {vol.Required(const.ATTR_VALUE): vol.Coerce(float)}
 
     return {"extra_fields": vol.Schema(fields)}

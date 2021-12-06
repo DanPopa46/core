@@ -4,12 +4,13 @@ from unittest.mock import patch
 from aioguardian.errors import GuardianError
 
 from homeassistant import data_entry_flow
+from homeassistant.components import dhcp, zeroconf
 from homeassistant.components.guardian import CONF_UID, DOMAIN
 from homeassistant.components.guardian.config_flow import (
     async_get_pin_from_discovery_hostname,
     async_get_pin_from_uid,
 )
-from homeassistant.config_entries import SOURCE_USER, SOURCE_ZEROCONF
+from homeassistant.config_entries import SOURCE_DHCP, SOURCE_USER, SOURCE_ZEROCONF
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PORT
 
 from tests.common import MockConfigEntry
@@ -82,20 +83,20 @@ async def test_step_user(hass, ping_client):
 
 async def test_step_zeroconf(hass, ping_client):
     """Test the zeroconf step."""
-    zeroconf_data = {
-        "host": "192.168.1.100",
-        "port": 7777,
-        "hostname": "GVC1-ABCD.local.",
-        "type": "_api._udp.local.",
-        "name": "Guardian Valve Controller API._api._udp.local.",
-        "properties": {"_raw": {}},
-    }
+    zeroconf_data = zeroconf.ZeroconfServiceInfo(
+        host="192.168.1.100",
+        port=7777,
+        hostname="GVC1-ABCD.local.",
+        type="_api._udp.local.",
+        name="Guardian Valve Controller API._api._udp.local.",
+        properties={"_raw": {}},
+    )
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_ZEROCONF}, data=zeroconf_data
     )
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "zeroconf_confirm"
+    assert result["step_id"] == "discovery_confirm"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={}
@@ -111,20 +112,20 @@ async def test_step_zeroconf(hass, ping_client):
 
 async def test_step_zeroconf_already_in_progress(hass):
     """Test the zeroconf step aborting because it's already in progress."""
-    zeroconf_data = {
-        "host": "192.168.1.100",
-        "port": 7777,
-        "hostname": "GVC1-ABCD.local.",
-        "type": "_api._udp.local.",
-        "name": "Guardian Valve Controller API._api._udp.local.",
-        "properties": {"_raw": {}},
-    }
+    zeroconf_data = zeroconf.ZeroconfServiceInfo(
+        host="192.168.1.100",
+        port=7777,
+        hostname="GVC1-ABCD.local.",
+        type="_api._udp.local.",
+        name="Guardian Valve Controller API._api._udp.local.",
+        properties={"_raw": {}},
+    )
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_ZEROCONF}, data=zeroconf_data
     )
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "zeroconf_confirm"
+    assert result["step_id"] == "discovery_confirm"
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_ZEROCONF}, data=zeroconf_data
@@ -133,10 +134,48 @@ async def test_step_zeroconf_already_in_progress(hass):
     assert result["reason"] == "already_in_progress"
 
 
-async def test_step_zeroconf_no_discovery_info(hass):
-    """Test the zeroconf step aborting because no discovery info came along."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_ZEROCONF}
+async def test_step_dhcp(hass, ping_client):
+    """Test the dhcp step."""
+    dhcp_data = dhcp.DhcpServiceInfo(
+        ip="192.168.1.100",
+        hostname="GVC1-ABCD.local.",
+        macaddress="aa:bb:cc:dd:ee:ff",
     )
-    assert result["type"] == data_entry_flow.RESULT_TYPE_ABORT
-    assert result["reason"] == "cannot_connect"
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_DHCP}, data=dhcp_data
+    )
+    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["step_id"] == "discovery_confirm"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={}
+    )
+    assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert result["title"] == "ABCDEF123456"
+    assert result["data"] == {
+        CONF_IP_ADDRESS: "192.168.1.100",
+        CONF_PORT: 7777,
+        CONF_UID: "ABCDEF123456",
+    }
+
+
+async def test_step_dhcp_already_in_progress(hass):
+    """Test the zeroconf step aborting because it's already in progress."""
+    dhcp_data = dhcp.DhcpServiceInfo(
+        ip="192.168.1.100",
+        hostname="GVC1-ABCD.local.",
+        macaddress="aa:bb:cc:dd:ee:ff",
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_DHCP}, data=dhcp_data
+    )
+    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["step_id"] == "discovery_confirm"
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_DHCP}, data=dhcp_data
+    )
+    assert result["type"] == "abort"
+    assert result["reason"] == "already_in_progress"

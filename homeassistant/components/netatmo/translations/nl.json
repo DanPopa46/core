@@ -4,14 +4,19 @@
             "authorize_url_timeout": "Time-out genereren autorisatie-URL.",
             "missing_configuration": "Het component is niet geconfigureerd. Volg de documentatie.",
             "no_url_available": "Geen URL beschikbaar. Voor informatie over deze fout, [check de helpsectie]({docs_url})",
+            "reauth_successful": "Herauthenticatie was succesvol",
             "single_instance_allowed": "Al geconfigureerd. Slechts een enkele configuratie mogelijk."
         },
         "create_entry": {
-            "default": "Succesvol geauthenticeerd met Netatmo."
+            "default": "Succesvol geauthenticeerd"
         },
         "step": {
             "pick_implementation": {
                 "title": "Kies de verificatiemethode"
+            },
+            "reauth_confirm": {
+                "description": "De Netatmo-integratie moet uw account opnieuw verifi\u00ebren",
+                "title": "Verifieer de integratie opnieuw"
             }
         }
     },
@@ -48,10 +53,17 @@
                     "lon_sw": "Lengtegraad Zuidwestelijke hoek",
                     "mode": "Berekening",
                     "show_on_map": "Toon op kaart"
-                }
+                },
+                "description": "Configureer een openbare weersensor voor een gebied.",
+                "title": "Netatmo openbare weersensor"
             },
             "public_weather_areas": {
-                "description": "Configureer openbare weersensoren."
+                "data": {
+                    "new_area": "Naam van het gebied",
+                    "weather_areas": "Weersgebieden"
+                },
+                "description": "Configureer openbare weersensoren.",
+                "title": "Netatmo openbare weersensor"
             }
         }
     }

@@ -8,12 +8,14 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
-from homeassistant.const import CONF_IP_ADDRESS
+from homeassistant.const import CONF_IP_ADDRESS, Platform
 import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+PLATFORMS = [Platform.CLIMATE]
 
 
 def coerce_ip(value):
@@ -70,13 +72,10 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass, entry):
     """Set up a config entry for Hisense AEH-W4A1."""
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, CLIMATE_DOMAIN)
-    )
-
+    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass, entry):
     """Unload a config entry."""
-    return await hass.config_entries.async_forward_entry_unload(entry, CLIMATE_DOMAIN)
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

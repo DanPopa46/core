@@ -1,16 +1,17 @@
 """Support for Ring Doorbell/Chimes."""
+from __future__ import annotations
+
 import asyncio
 from datetime import timedelta
 from functools import partial
 import logging
 from pathlib import Path
-from typing import Optional
 
 from oauthlib.oauth2 import AccessDeniedError
 import requests
 from ring_doorbell import Auth, Ring
 
-from homeassistant.const import __version__
+from homeassistant.const import Platform, __version__
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util.async_ import run_callback_threadsafe
@@ -25,7 +26,13 @@ NOTIFICATION_TITLE = "Ring Setup"
 DOMAIN = "ring"
 DEFAULT_ENTITY_NAMESPACE = "ring"
 
-PLATFORMS = ("binary_sensor", "light", "sensor", "switch", "camera")
+PLATFORMS = [
+    Platform.BINARY_SENSOR,
+    Platform.LIGHT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.CAMERA,
+]
 
 
 async def async_setup(hass, config):
@@ -99,10 +106,7 @@ async def async_setup_entry(hass, entry):
         ),
     }
 
-    for platform in PLATFORMS:
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(entry, platform)
-        )
+    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     if hass.services.has_service(DOMAIN, "update"):
         return True
@@ -123,15 +127,7 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass, entry):
     """Unload Ring entry."""
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(entry, platform)
-                for platform in PLATFORMS
-            ]
-        )
-    )
-    if not unload_ok:
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 
     hass.data[DOMAIN].pop(entry.entry_id)
@@ -156,7 +152,7 @@ class GlobalDataUpdater:
         ring: Ring,
         update_method: str,
         update_interval: timedelta,
-    ):
+    ) -> None:
         """Initialize global data updater."""
         self.hass = hass
         self.data_type = data_type
@@ -187,7 +183,7 @@ class GlobalDataUpdater:
             self._unsub_interval()
             self._unsub_interval = None
 
-    async def async_refresh_all(self, _now: Optional[int] = None) -> None:
+    async def async_refresh_all(self, _now: int | None = None) -> None:
         """Time to update."""
         if not self.listeners:
             return
@@ -229,7 +225,7 @@ class DeviceDataUpdater:
         ring: Ring,
         update_method: str,
         update_interval: timedelta,
-    ):
+    ) -> None:
         """Initialize device data updater."""
         self.data_type = data_type
         self.hass = hass

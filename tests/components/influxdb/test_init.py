@@ -1,6 +1,7 @@
 """The tests for the InfluxDB component."""
 from dataclasses import dataclass
 import datetime
+from http import HTTPStatus
 from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
@@ -127,7 +128,7 @@ async def test_setup_config_full(hass, mock_client, config_ext, get_write_api):
     assert await async_setup_component(hass, influxdb.DOMAIN, config)
     await hass.async_block_till_done()
     assert hass.bus.listen.called
-    assert EVENT_STATE_CHANGED == hass.bus.listen.call_args_list[0][0][0]
+    assert hass.bus.listen.call_args_list[0][0][0] == EVENT_STATE_CHANGED
     assert get_write_api(mock_client).call_count == 1
 
 
@@ -254,14 +255,15 @@ async def test_setup_config_ssl(
     config = {"influxdb": config_base.copy()}
     config["influxdb"].update(config_ext)
 
-    with patch("os.access", return_value=True):
-        with patch("os.path.isfile", return_value=True):
-            assert await async_setup_component(hass, influxdb.DOMAIN, config)
-            await hass.async_block_till_done()
+    with patch("os.access", return_value=True), patch(
+        "os.path.isfile", return_value=True
+    ):
+        assert await async_setup_component(hass, influxdb.DOMAIN, config)
+        await hass.async_block_till_done()
 
-            assert hass.bus.listen.called
-            assert EVENT_STATE_CHANGED == hass.bus.listen.call_args_list[0][0][0]
-            assert expected_client_args.items() <= mock_client.call_args.kwargs.items()
+        assert hass.bus.listen.called
+        assert hass.bus.listen.call_args_list[0][0][0] == EVENT_STATE_CHANGED
+        assert expected_client_args.items() <= mock_client.call_args.kwargs.items()
 
 
 @pytest.mark.parametrize(
@@ -280,7 +282,7 @@ async def test_setup_minimal_config(hass, mock_client, config_ext, get_write_api
     assert await async_setup_component(hass, influxdb.DOMAIN, config)
     await hass.async_block_till_done()
     assert hass.bus.listen.called
-    assert EVENT_STATE_CHANGED == hass.bus.listen.call_args_list[0][0][0]
+    assert hass.bus.listen.call_args_list[0][0][0] == EVENT_STATE_CHANGED
     assert get_write_api(mock_client).call_count == 1
 
 
@@ -1639,14 +1641,16 @@ async def test_connection_failure_on_startup(
             BASE_V1_CONFIG,
             _get_write_api_mock_v1,
             influxdb.DEFAULT_API_VERSION,
-            influxdb.exceptions.InfluxDBClientError("fail", code=400),
+            influxdb.exceptions.InfluxDBClientError(
+                "fail", code=HTTPStatus.BAD_REQUEST
+            ),
         ),
         (
             influxdb.API_VERSION_2,
             BASE_V2_CONFIG,
             _get_write_api_mock_v2,
             influxdb.API_VERSION_2,
-            influxdb.ApiException(status=400),
+            influxdb.ApiException(status=HTTPStatus.BAD_REQUEST),
         ),
     ],
     indirect=["mock_client", "get_mock_call"],

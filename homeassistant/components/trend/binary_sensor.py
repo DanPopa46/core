@@ -146,7 +146,7 @@ class SensorTrend(BinarySensorEntity):
         return self._device_class
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the state attributes of the sensor."""
         return {
             ATTR_ENTITY_ID: self._entity_id,
@@ -169,8 +169,7 @@ class SensorTrend(BinarySensorEntity):
         @callback
         def trend_sensor_state_listener(event):
             """Handle state changes on the observed device."""
-            new_state = event.data.get("new_state")
-            if new_state is None:
+            if (new_state := event.data.get("new_state")) is None:
                 return
             try:
                 if self._attribute:

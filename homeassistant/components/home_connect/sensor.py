@@ -3,6 +3,7 @@
 from datetime import timedelta
 import logging
 
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import CONF_ENTITIES, DEVICE_CLASS_TIMESTAMP
 import homeassistant.util.dt as dt_util
 
@@ -27,7 +28,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(await hass.async_add_executor_job(get_entities), True)
 
 
-class HomeConnectSensor(HomeConnectEntity):
+class HomeConnectSensor(HomeConnectEntity, SensorEntity):
     """Sensor class for Home Connect."""
 
     def __init__(self, device, desc, key, unit, icon, device_class, sign=1):
@@ -41,7 +42,7 @@ class HomeConnectSensor(HomeConnectEntity):
         self._sign = sign
 
     @property
-    def state(self):
+    def native_value(self):
         """Return true if the binary sensor is on."""
         return self._state
 
@@ -62,16 +63,14 @@ class HomeConnectSensor(HomeConnectEntity):
                 elif (
                     self._state is not None
                     and self._sign == 1
-                    and dt_util.parse_datetime(self._state) < dt_util.utcnow()
+                    and self._state < dt_util.utcnow()
                 ):
                     # if the date is supposed to be in the future but we're
                     # already past it, set state to None.
                     self._state = None
                 else:
                     seconds = self._sign * float(status[self._key][ATTR_VALUE])
-                    self._state = (
-                        dt_util.utcnow() + timedelta(seconds=seconds)
-                    ).isoformat()
+                    self._state = dt_util.utcnow() + timedelta(seconds=seconds)
             else:
                 self._state = status[self._key].get(ATTR_VALUE)
                 if self._key == BSH_OPERATION_STATE:
@@ -82,7 +81,7 @@ class HomeConnectSensor(HomeConnectEntity):
         _LOGGER.debug("Updated, new state: %s", self._state)
 
     @property
-    def unit_of_measurement(self):
+    def native_unit_of_measurement(self):
         """Return the unit of measurement."""
         return self._unit
 

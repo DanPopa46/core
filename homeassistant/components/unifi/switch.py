@@ -1,10 +1,9 @@
-"""Switch platform for UniFi integration.
+"""Switch platform for UniFi Network integration.
 
 Support for controlling power supply of clients which are powered over Ethernet (POE).
 Support for controlling network access of clients selected in option flow.
 Support for controlling deep packet inspection (DPI) restriction groups.
 """
-import logging
 from typing import Any
 
 from aiounifi.api import SOURCE_EVENT
@@ -16,16 +15,17 @@ from aiounifi.events import (
 )
 
 from homeassistant.components.switch import DOMAIN, SwitchEntity
+from homeassistant.const import ENTITY_CATEGORY_CONFIG
 from homeassistant.core import callback
+from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_registry import async_entries_for_config_entry
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import ATTR_MANUFACTURER, DOMAIN as UNIFI_DOMAIN
 from .unifi_client import UniFiClient
 from .unifi_entity_base import UniFiBase
-
-_LOGGER = logging.getLogger(__name__)
 
 BLOCK_SWITCH = "block"
 DPI_SWITCH = "dpi"
@@ -36,7 +36,7 @@ CLIENT_UNBLOCKED = (WIRED_CLIENT_UNBLOCKED, WIRELESS_CLIENT_UNBLOCKED)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up switches for UniFi component.
+    """Set up switches for UniFi Network integration.
 
     Switches are controlling network access and switch ports with POE.
     """
@@ -86,7 +86,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             add_dpi_entities(controller, async_add_entities, dpi_groups)
 
     for signal in (controller.signal_update, controller.signal_options_update):
-        controller.listeners.append(async_dispatcher_connect(hass, signal, items_added))
+        config_entry.async_on_unload(
+            async_dispatcher_connect(hass, signal, items_added)
+        )
 
     items_added()
     known_poe_clients.clear()
@@ -183,6 +185,8 @@ class UniFiPOEClientSwitch(UniFiClient, SwitchEntity, RestoreEntity):
     DOMAIN = DOMAIN
     TYPE = POE_SWITCH
 
+    _attr_entity_category = ENTITY_CATEGORY_CONFIG
+
     def __init__(self, client, controller):
         """Set up POE switch."""
         super().__init__(client, controller)
@@ -238,7 +242,7 @@ class UniFiPOEClientSwitch(UniFiClient, SwitchEntity, RestoreEntity):
         await self.device.async_set_port_poe_mode(self.client.sw_port, "off")
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the device state attributes."""
         attributes = {
             "power": self.port.poe_power,
@@ -270,6 +274,8 @@ class UniFiBlockClientSwitch(UniFiClient, SwitchEntity):
     DOMAIN = DOMAIN
     TYPE = BLOCK_SWITCH
 
+    _attr_entity_category = ENTITY_CATEGORY_CONFIG
+
     def __init__(self, client, controller):
         """Set up block switch."""
         super().__init__(client, controller)
@@ -279,10 +285,11 @@ class UniFiBlockClientSwitch(UniFiClient, SwitchEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the clients state."""
-        if self.client.last_updated == SOURCE_EVENT:
-
-            if self.client.event.event in CLIENT_BLOCKED + CLIENT_UNBLOCKED:
-                self._is_blocked = self.client.event.event in CLIENT_BLOCKED
+        if (
+            self.client.last_updated == SOURCE_EVENT
+            and self.client.event.event in CLIENT_BLOCKED + CLIENT_UNBLOCKED
+        ):
+            self._is_blocked = self.client.event.event in CLIENT_BLOCKED
 
         super().async_update_callback()
 
@@ -317,6 +324,8 @@ class UniFiDPIRestrictionSwitch(UniFiBase, SwitchEntity):
 
     DOMAIN = DOMAIN
     TYPE = DPI_SWITCH
+
+    _attr_entity_category = ENTITY_CATEGORY_CONFIG
 
     @property
     def key(self) -> Any:
@@ -359,12 +368,12 @@ class UniFiDPIRestrictionSwitch(UniFiBase, SwitchEntity):
             await self.remove_item({self.key})
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return a service description for device registry."""
-        return {
-            "identifiers": {(DOMAIN, f"unifi_controller_{self._item.site_id}")},
-            "name": "UniFi Controller",
-            "manufacturer": ATTR_MANUFACTURER,
-            "model": "UniFi Controller",
-            "entry_type": "service",
-        }
+        return DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, f"unifi_controller_{self._item.site_id}")},
+            manufacturer=ATTR_MANUFACTURER,
+            model="UniFi Network",
+            name="UniFi Network",
+        )

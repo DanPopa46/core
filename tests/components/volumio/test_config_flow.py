@@ -2,6 +2,7 @@
 from unittest.mock import patch
 
 from homeassistant import config_entries
+from homeassistant.components import zeroconf
 from homeassistant.components.volumio.config_flow import CannotConnectError
 from homeassistant.components.volumio.const import DOMAIN
 
@@ -16,17 +17,20 @@ TEST_CONNECTION = {
 }
 
 
-TEST_DISCOVERY = {
-    "host": "1.1.1.1",
-    "port": 3000,
-    "properties": {"volumioName": "discovered", "UUID": "2222-2222-2222-2222"},
-}
+TEST_DISCOVERY = zeroconf.ZeroconfServiceInfo(
+    host="1.1.1.1",
+    hostname="mock_hostname",
+    name="mock_name",
+    port=3000,
+    properties={"volumioName": "discovered", "UUID": "2222-2222-2222-2222"},
+    type="mock_type",
+)
 
 TEST_DISCOVERY_RESULT = {
-    "host": TEST_DISCOVERY["host"],
-    "port": TEST_DISCOVERY["port"],
-    "id": TEST_DISCOVERY["properties"]["UUID"],
-    "name": TEST_DISCOVERY["properties"]["volumioName"],
+    "host": TEST_DISCOVERY.host,
+    "port": TEST_DISCOVERY.port,
+    "id": TEST_DISCOVERY.properties["UUID"],
+    "name": TEST_DISCOVERY.properties["volumioName"],
 }
 
 
@@ -42,8 +46,6 @@ async def test_form(hass):
         "homeassistant.components.volumio.config_flow.Volumio.get_system_info",
         return_value=TEST_SYSTEM_INFO,
     ), patch(
-        "homeassistant.components.volumio.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.volumio.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
@@ -57,7 +59,6 @@ async def test_form(hass):
     assert result2["title"] == "TestVolumio"
     assert result2["data"] == {**TEST_SYSTEM_INFO, **TEST_CONNECTION}
 
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -82,7 +83,7 @@ async def test_form_updates_unique_id(hass):
     with patch(
         "homeassistant.components.volumio.config_flow.Volumio.get_system_info",
         return_value=TEST_SYSTEM_INFO,
-    ), patch("homeassistant.components.volumio.async_setup", return_value=True), patch(
+    ), patch(
         "homeassistant.components.volumio.async_setup_entry",
         return_value=True,
     ):
@@ -110,8 +111,6 @@ async def test_empty_system_info(hass):
         "homeassistant.components.volumio.config_flow.Volumio.get_system_info",
         return_value={},
     ), patch(
-        "homeassistant.components.volumio.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.volumio.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
@@ -130,7 +129,6 @@ async def test_empty_system_info(hass):
         "id": None,
     }
 
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -176,15 +174,13 @@ async def test_discovery(hass):
     """Test discovery flow works."""
 
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "zeroconf"}, data=TEST_DISCOVERY
+        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=TEST_DISCOVERY
     )
 
     with patch(
         "homeassistant.components.volumio.config_flow.Volumio.get_system_info",
         return_value=TEST_SYSTEM_INFO,
     ), patch(
-        "homeassistant.components.volumio.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.volumio.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
@@ -201,7 +197,6 @@ async def test_discovery(hass):
     assert result2["result"]
     assert result2["result"].unique_id == TEST_DISCOVERY_RESULT["id"]
 
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -209,7 +204,7 @@ async def test_discovery_cannot_connect(hass):
     """Test discovery aborts if cannot connect."""
 
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "zeroconf"}, data=TEST_DISCOVERY
+        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=TEST_DISCOVERY
     )
 
     with patch(
@@ -228,13 +223,13 @@ async def test_discovery_cannot_connect(hass):
 async def test_discovery_duplicate_data(hass):
     """Test discovery aborts if same mDNS packet arrives."""
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "zeroconf"}, data=TEST_DISCOVERY
+        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=TEST_DISCOVERY
     )
     assert result["type"] == "form"
     assert result["step_id"] == "discovery_confirm"
 
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "zeroconf"}, data=TEST_DISCOVERY
+        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=TEST_DISCOVERY
     )
     assert result["type"] == "abort"
     assert result["reason"] == "already_in_progress"
@@ -251,19 +246,19 @@ async def test_discovery_updates_unique_id(hass):
             "name": "dummy",
             "id": TEST_DISCOVERY_RESULT["id"],
         },
-        state=config_entries.ENTRY_STATE_SETUP_RETRY,
+        state=config_entries.ConfigEntryState.SETUP_RETRY,
     )
 
     entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.volumio.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.volumio.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
         result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "zeroconf"}, data=TEST_DISCOVERY
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=TEST_DISCOVERY,
         )
         await hass.async_block_till_done()
 
@@ -271,5 +266,4 @@ async def test_discovery_updates_unique_id(hass):
     assert result["reason"] == "already_configured"
 
     assert entry.data == TEST_DISCOVERY_RESULT
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1

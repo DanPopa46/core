@@ -1,9 +1,11 @@
 """Test the Tado config flow."""
+from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import requests
 
-from homeassistant import config_entries, setup
+from homeassistant import config_entries
+from homeassistant.components import zeroconf
 from homeassistant.components.tado.const import DOMAIN
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 
@@ -21,7 +23,7 @@ def _get_mock_tado_api(getMe=None):
 
 async def test_form(hass):
     """Test we can setup though the user path."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -34,8 +36,6 @@ async def test_form(hass):
         "homeassistant.components.tado.config_flow.Tado",
         return_value=mock_tado_api,
     ), patch(
-        "homeassistant.components.tado.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.tado.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
@@ -51,7 +51,6 @@ async def test_form(hass):
         "username": "test-username",
         "password": "test-password",
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -62,7 +61,7 @@ async def test_form_invalid_auth(hass):
     )
 
     response_mock = MagicMock()
-    type(response_mock).status_code = 401
+    type(response_mock).status_code = HTTPStatus.UNAUTHORIZED
     mock_tado_api = _get_mock_tado_api(getMe=requests.HTTPError(response=response_mock))
 
     with patch(
@@ -85,7 +84,7 @@ async def test_form_cannot_connect(hass):
     )
 
     response_mock = MagicMock()
-    type(response_mock).status_code = 500
+    type(response_mock).status_code = HTTPStatus.INTERNAL_SERVER_ERROR
     mock_tado_api = _get_mock_tado_api(getMe=requests.HTTPError(response=response_mock))
 
     with patch(
@@ -124,12 +123,18 @@ async def test_no_homes(hass):
 
 async def test_form_homekit(hass):
     """Test that we abort from homekit if tado is already setup."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": "homekit"},
-        data={"properties": {"id": "AA:BB:CC:DD:EE:FF"}},
+        context={"source": config_entries.SOURCE_HOMEKIT},
+        data=zeroconf.ZeroconfServiceInfo(
+            host="mock_host",
+            hostname="mock_hostname",
+            name="mock_name",
+            port=None,
+            properties={zeroconf.ATTR_PROPERTIES_ID: "AA:BB:CC:DD:EE:FF"},
+            type="mock_type",
+        ),
     )
     assert result["type"] == "form"
     assert result["errors"] == {}
@@ -147,7 +152,14 @@ async def test_form_homekit(hass):
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": "homekit"},
-        data={"properties": {"id": "AA:BB:CC:DD:EE:FF"}},
+        context={"source": config_entries.SOURCE_HOMEKIT},
+        data=zeroconf.ZeroconfServiceInfo(
+            host="mock_host",
+            hostname="mock_hostname",
+            name="mock_name",
+            port=None,
+            properties={zeroconf.ATTR_PROPERTIES_ID: "AA:BB:CC:DD:EE:FF"},
+            type="mock_type",
+        ),
     )
     assert result["type"] == "abort"

@@ -1,19 +1,24 @@
 """Offer reusable conditions."""
+from __future__ import annotations
+
 import asyncio
 from collections import deque
+from collections.abc import Container, Generator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import functools as ft
 import logging
 import re
 import sys
-from typing import Any, Callable, Container, Generator, List, Optional, Set, Union, cast
+from typing import Any, Callable, cast
 
 from homeassistant.components import zone as zone_cmp
 from homeassistant.components.device_automation import (
     async_get_device_automation_platform,
 )
+from homeassistant.components.sensor import DEVICE_CLASS_TIMESTAMP
 from homeassistant.const import (
+    ATTR_DEVICE_CLASS,
     ATTR_GPS_ACCURACY,
     ATTR_LATITUDE,
     ATTR_LONGITUDE,
@@ -26,6 +31,7 @@ from homeassistant.const import (
     CONF_DEVICE_ID,
     CONF_DOMAIN,
     CONF_ENTITY_ID,
+    CONF_ID,
     CONF_STATE,
     CONF_VALUE_TEMPLATE,
     CONF_WEEKDAY,
@@ -45,7 +51,7 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     TemplateError,
 )
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.helpers.template import Template
 from homeassistant.helpers.typing import ConfigType, TemplateVarsType
@@ -63,8 +69,11 @@ from .trace import (
     trace_stack_top,
 )
 
-FROM_CONFIG_FORMAT = "{}_from_config"
+# mypy: disallow-any-generics
+
 ASYNC_FROM_CONFIG_FORMAT = "async_{}_from_config"
+FROM_CONFIG_FORMAT = "{}_from_config"
+VALIDATE_CONFIG_FORMAT = "{}_validate_config"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,8 +86,8 @@ ConditionCheckerType = Callable[[HomeAssistant, TemplateVarsType], bool]
 
 def condition_trace_append(variables: TemplateVarsType, path: str) -> TraceElement:
     """Append a TraceElement to trace[path]."""
-    trace_element = TraceElement(variables)
-    trace_append_element(trace_element, path)
+    trace_element = TraceElement(variables, path)
+    trace_append_element(trace_element)
     return trace_element
 
 
@@ -94,18 +103,37 @@ def condition_trace_set_result(result: bool, **kwargs: Any) -> None:
     node.set_result(result=result, **kwargs)
 
 
+def condition_trace_update_result(**kwargs: Any) -> None:
+    """Update the result of TraceElement at the top of the stack."""
+    node = trace_stack_top(trace_stack_cv)
+
+    # The condition function may be called directly, in which case tracing
+    # is not setup
+    if not node:
+        return
+
+    node.update_result(**kwargs)
+
+
 @contextmanager
-def trace_condition(variables: TemplateVarsType) -> Generator:
+def trace_condition(variables: TemplateVarsType) -> Generator[TraceElement, None, None]:
     """Trace condition evaluation."""
-    trace_element = condition_trace_append(variables, trace_path_get())
-    trace_stack_push(trace_stack_cv, trace_element)
+    should_pop = True
+    trace_element = trace_stack_top(trace_stack_cv)
+    if trace_element and trace_element.reuse_by_child:
+        should_pop = False
+        trace_element.reuse_by_child = False
+    else:
+        trace_element = condition_trace_append(variables, trace_path_get())
+        trace_stack_push(trace_stack_cv, trace_element)
     try:
         yield trace_element
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:
         trace_element.set_error(ex)
         raise ex
     finally:
-        trace_stack_pop(trace_stack_cv)
+        if should_pop:
+            trace_stack_pop(trace_stack_cv)
 
 
 def trace_condition_function(condition: ConditionCheckerType) -> ConditionCheckerType:
@@ -116,7 +144,7 @@ def trace_condition_function(condition: ConditionCheckerType) -> ConditionChecke
         """Trace condition."""
         with trace_condition(variables):
             result = condition(hass, variables)
-            condition_trace_set_result(result)
+            condition_trace_update_result(result=result)
             return result
 
     return wrapper
@@ -124,8 +152,7 @@ def trace_condition_function(condition: ConditionCheckerType) -> ConditionChecke
 
 async def async_from_config(
     hass: HomeAssistant,
-    config: Union[ConfigType, Template],
-    config_validation: bool = True,
+    config: ConfigType | Template,
 ) -> ConditionCheckerType:
     """Turn a condition configuration into a method.
 
@@ -154,21 +181,15 @@ async def async_from_config(
         check_factory = check_factory.func
 
     if asyncio.iscoroutinefunction(check_factory):
-        return cast(
-            ConditionCheckerType, await factory(hass, config, config_validation)
-        )
-    return cast(ConditionCheckerType, factory(config, config_validation))
+        return cast(ConditionCheckerType, await factory(hass, config))
+    return cast(ConditionCheckerType, factory(config))
 
 
 async def async_and_from_config(
-    hass: HomeAssistant, config: ConfigType, config_validation: bool = True
+    hass: HomeAssistant, config: ConfigType
 ) -> ConditionCheckerType:
     """Create multi condition matcher using 'AND'."""
-    if config_validation:
-        config = cv.AND_CONDITION_SCHEMA(config)
-    checks = [
-        await async_from_config(hass, entry, False) for entry in config["conditions"]
-    ]
+    checks = [await async_from_config(hass, entry) for entry in config["conditions"]]
 
     @trace_condition_function
     def if_and_condition(
@@ -196,14 +217,10 @@ async def async_and_from_config(
 
 
 async def async_or_from_config(
-    hass: HomeAssistant, config: ConfigType, config_validation: bool = True
+    hass: HomeAssistant, config: ConfigType
 ) -> ConditionCheckerType:
     """Create multi condition matcher using 'OR'."""
-    if config_validation:
-        config = cv.OR_CONDITION_SCHEMA(config)
-    checks = [
-        await async_from_config(hass, entry, False) for entry in config["conditions"]
-    ]
+    checks = [await async_from_config(hass, entry) for entry in config["conditions"]]
 
     @trace_condition_function
     def if_or_condition(
@@ -231,14 +248,10 @@ async def async_or_from_config(
 
 
 async def async_not_from_config(
-    hass: HomeAssistant, config: ConfigType, config_validation: bool = True
+    hass: HomeAssistant, config: ConfigType
 ) -> ConditionCheckerType:
     """Create multi condition matcher using 'NOT'."""
-    if config_validation:
-        config = cv.NOT_CONDITION_SCHEMA(config)
-    checks = [
-        await async_from_config(hass, entry, False) for entry in config["conditions"]
-    ]
+    checks = [await async_from_config(hass, entry) for entry in config["conditions"]]
 
     @trace_condition_function
     def if_not_condition(
@@ -267,10 +280,10 @@ async def async_not_from_config(
 
 def numeric_state(
     hass: HomeAssistant,
-    entity: Union[None, str, State],
-    below: Optional[Union[float, str]] = None,
-    above: Optional[Union[float, str]] = None,
-    value_template: Optional[Template] = None,
+    entity: None | str | State,
+    below: float | str | None = None,
+    above: float | str | None = None,
+    value_template: Template | None = None,
     variables: TemplateVarsType = None,
 ) -> bool:
     """Test a numeric state condition."""
@@ -286,14 +299,14 @@ def numeric_state(
     ).result()
 
 
-def async_numeric_state(
+def async_numeric_state(  # noqa: C901
     hass: HomeAssistant,
-    entity: Union[None, str, State],
-    below: Optional[Union[float, str]] = None,
-    above: Optional[Union[float, str]] = None,
-    value_template: Optional[Template] = None,
+    entity: None | str | State,
+    below: float | str | None = None,
+    above: float | str | None = None,
+    value_template: Template | None = None,
     variables: TemplateVarsType = None,
-    attribute: Optional[str] = None,
+    attribute: str | None = None,
 ) -> bool:
     """Test a numeric state condition."""
     if entity is None:
@@ -301,18 +314,18 @@ def async_numeric_state(
 
     if isinstance(entity, str):
         entity_id = entity
-        entity = hass.states.get(entity)
 
-        if entity is None:
+        if (entity := hass.states.get(entity)) is None:
             raise ConditionErrorMessage("numeric_state", f"unknown entity {entity_id}")
     else:
         entity_id = entity.entity_id
 
     if attribute is not None and attribute not in entity.attributes:
-        raise ConditionErrorMessage(
-            "numeric_state",
-            f"attribute '{attribute}' (of entity {entity_id}) does not exist",
+        condition_trace_set_result(
+            False,
+            message=f"attribute '{attribute}' of entity {entity_id} does not exist",
         )
+        return False
 
     value: Any = None
     if value_template is None:
@@ -330,8 +343,12 @@ def async_numeric_state(
                 "numeric_state", f"template error: {ex}"
             ) from ex
 
-    # Known states that never match the numeric condition
-    if value in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+    # Known states or attribute values that never match the numeric condition
+    if value in (None, STATE_UNAVAILABLE, STATE_UNKNOWN):
+        condition_trace_set_result(
+            False,
+            message=f"value '{value}' is non-numeric and treated as False",
+        )
         return False
 
     try:
@@ -344,8 +361,7 @@ def async_numeric_state(
 
     if below is not None:
         if isinstance(below, str):
-            below_entity = hass.states.get(below)
-            if not below_entity:
+            if not (below_entity := hass.states.get(below)):
                 raise ConditionErrorMessage(
                     "numeric_state", f"unknown 'below' entity {below}"
                 )
@@ -373,8 +389,7 @@ def async_numeric_state(
 
     if above is not None:
         if isinstance(above, str):
-            above_entity = hass.states.get(above)
-            if not above_entity:
+            if not (above_entity := hass.states.get(above)):
                 raise ConditionErrorMessage(
                     "numeric_state", f"unknown 'above' entity {above}"
                 )
@@ -404,12 +419,8 @@ def async_numeric_state(
     return True
 
 
-def async_numeric_state_from_config(
-    config: ConfigType, config_validation: bool = True
-) -> ConditionCheckerType:
+def async_numeric_state_from_config(config: ConfigType) -> ConditionCheckerType:
     """Wrap action method with state based condition."""
-    if config_validation:
-        config = cv.NUMERIC_STATE_CONDITION_SCHEMA(config)
     entity_ids = config.get(CONF_ENTITY_ID, [])
     attribute = config.get(CONF_ATTRIBUTE)
     below = config.get(CONF_BELOW)
@@ -456,10 +467,10 @@ def async_numeric_state_from_config(
 
 def state(
     hass: HomeAssistant,
-    entity: Union[None, str, State],
+    entity: None | str | State,
     req_state: Any,
-    for_period: Optional[timedelta] = None,
-    attribute: Optional[str] = None,
+    for_period: timedelta | None = None,
+    attribute: str | None = None,
 ) -> bool:
     """Test if state matches requirements.
 
@@ -470,17 +481,18 @@ def state(
 
     if isinstance(entity, str):
         entity_id = entity
-        entity = hass.states.get(entity)
 
-        if entity is None:
+        if (entity := hass.states.get(entity)) is None:
             raise ConditionErrorMessage("state", f"unknown entity {entity_id}")
     else:
         entity_id = entity.entity_id
 
     if attribute is not None and attribute not in entity.attributes:
-        raise ConditionErrorMessage(
-            "state", f"attribute '{attribute}' (of entity {entity_id}) does not exist"
+        condition_trace_set_result(
+            False,
+            message=f"attribute '{attribute}' of entity {entity_id} does not exist",
         )
+        return False
 
     assert isinstance(entity, State)
 
@@ -499,8 +511,7 @@ def state(
             isinstance(req_state_value, str)
             and INPUT_ENTITY_ID.match(req_state_value) is not None
         ):
-            state_entity = hass.states.get(req_state_value)
-            if not state_entity:
+            if not (state_entity := hass.states.get(req_state_value)):
                 raise ConditionErrorMessage(
                     "state", f"the 'state' entity {req_state_value} is unavailable"
                 )
@@ -519,14 +530,10 @@ def state(
     return duration_ok
 
 
-def state_from_config(
-    config: ConfigType, config_validation: bool = True
-) -> ConditionCheckerType:
+def state_from_config(config: ConfigType) -> ConditionCheckerType:
     """Wrap action method with state based condition."""
-    if config_validation:
-        config = cv.STATE_CONDITION_SCHEMA(config)
     entity_ids = config.get(CONF_ENTITY_ID, [])
-    req_states: Union[str, List[str]] = config.get(CONF_STATE, [])
+    req_states: str | list[str] = config.get(CONF_STATE, [])
     for_period = config.get("for")
     attribute = config.get(CONF_ATTRIBUTE)
 
@@ -560,10 +567,10 @@ def state_from_config(
 
 def sun(
     hass: HomeAssistant,
-    before: Optional[str] = None,
-    after: Optional[str] = None,
-    before_offset: Optional[timedelta] = None,
-    after_offset: Optional[timedelta] = None,
+    before: str | None = None,
+    after: str | None = None,
+    before_offset: timedelta | None = None,
+    after_offset: timedelta | None = None,
 ) -> bool:
     """Test if current time matches sun requirements."""
     utcnow = dt_util.utcnow()
@@ -592,33 +599,43 @@ def sun(
 
     if sunrise is None and SUN_EVENT_SUNRISE in (before, after):
         # There is no sunrise today
+        condition_trace_set_result(False, message="no sunrise today")
         return False
 
     if sunset is None and SUN_EVENT_SUNSET in (before, after):
         # There is no sunset today
+        condition_trace_set_result(False, message="no sunset today")
         return False
 
-    if before == SUN_EVENT_SUNRISE and utcnow > cast(datetime, sunrise) + before_offset:
-        return False
+    if before == SUN_EVENT_SUNRISE:
+        wanted_time_before = cast(datetime, sunrise) + before_offset
+        condition_trace_update_result(wanted_time_before=wanted_time_before)
+        if utcnow > wanted_time_before:
+            return False
 
-    if before == SUN_EVENT_SUNSET and utcnow > cast(datetime, sunset) + before_offset:
-        return False
+    if before == SUN_EVENT_SUNSET:
+        wanted_time_before = cast(datetime, sunset) + before_offset
+        condition_trace_update_result(wanted_time_before=wanted_time_before)
+        if utcnow > wanted_time_before:
+            return False
 
-    if after == SUN_EVENT_SUNRISE and utcnow < cast(datetime, sunrise) + after_offset:
-        return False
+    if after == SUN_EVENT_SUNRISE:
+        wanted_time_after = cast(datetime, sunrise) + after_offset
+        condition_trace_update_result(wanted_time_after=wanted_time_after)
+        if utcnow < wanted_time_after:
+            return False
 
-    if after == SUN_EVENT_SUNSET and utcnow < cast(datetime, sunset) + after_offset:
-        return False
+    if after == SUN_EVENT_SUNSET:
+        wanted_time_after = cast(datetime, sunset) + after_offset
+        condition_trace_update_result(wanted_time_after=wanted_time_after)
+        if utcnow < wanted_time_after:
+            return False
 
     return True
 
 
-def sun_from_config(
-    config: ConfigType, config_validation: bool = True
-) -> ConditionCheckerType:
+def sun_from_config(config: ConfigType) -> ConditionCheckerType:
     """Wrap action method with sun based condition."""
-    if config_validation:
-        config = cv.SUN_CONDITION_SCHEMA(config)
     before = config.get("before")
     after = config.get("after")
     before_offset = config.get("before_offset")
@@ -642,23 +659,26 @@ def template(
 
 
 def async_template(
-    hass: HomeAssistant, value_template: Template, variables: TemplateVarsType = None
+    hass: HomeAssistant,
+    value_template: Template,
+    variables: TemplateVarsType = None,
+    trace_result: bool = True,
 ) -> bool:
     """Test if template condition matches."""
     try:
-        value: str = value_template.async_render(variables, parse_result=False)
+        info = value_template.async_render_to_info(variables, parse_result=False)
+        value = info.result()
     except TemplateError as ex:
         raise ConditionErrorMessage("template", str(ex)) from ex
 
-    return value.lower() == "true"
+    result = value.lower() == "true"
+    if trace_result:
+        condition_trace_set_result(result, entities=list(info.entities))
+    return result
 
 
-def async_template_from_config(
-    config: ConfigType, config_validation: bool = True
-) -> ConditionCheckerType:
+def async_template_from_config(config: ConfigType) -> ConditionCheckerType:
     """Wrap action method with state based condition."""
-    if config_validation:
-        config = cv.TEMPLATE_CONDITION_SCHEMA(config)
     value_template = cast(Template, config.get(CONF_VALUE_TEMPLATE))
 
     @trace_condition_function
@@ -673,9 +693,9 @@ def async_template_from_config(
 
 def time(
     hass: HomeAssistant,
-    before: Optional[Union[dt_util.dt.time, str]] = None,
-    after: Optional[Union[dt_util.dt.time, str]] = None,
-    weekday: Union[None, str, Container[str]] = None,
+    before: dt_util.dt.time | str | None = None,
+    after: dt_util.dt.time | str | None = None,
+    weekday: None | str | Container[str] = None,
 ) -> bool:
     """Test if local time condition matches.
 
@@ -690,38 +710,64 @@ def time(
     if after is None:
         after = dt_util.dt.time(0)
     elif isinstance(after, str):
-        after_entity = hass.states.get(after)
-        if not after_entity:
+        if not (after_entity := hass.states.get(after)):
             raise ConditionErrorMessage("time", f"unknown 'after' entity {after}")
-        after = dt_util.dt.time(
-            after_entity.attributes.get("hour", 23),
-            after_entity.attributes.get("minute", 59),
-            after_entity.attributes.get("second", 59),
-        )
+        if after_entity.domain == "input_datetime":
+            after = dt_util.dt.time(
+                after_entity.attributes.get("hour", 23),
+                after_entity.attributes.get("minute", 59),
+                after_entity.attributes.get("second", 59),
+            )
+        elif after_entity.attributes.get(
+            ATTR_DEVICE_CLASS
+        ) == DEVICE_CLASS_TIMESTAMP and after_entity.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        ):
+            after_datetime = dt_util.parse_datetime(after_entity.state)
+            if after_datetime is None:
+                return False
+            after = dt_util.as_local(after_datetime).time()
+        else:
+            return False
 
     if before is None:
         before = dt_util.dt.time(23, 59, 59, 999999)
     elif isinstance(before, str):
-        before_entity = hass.states.get(before)
-        if not before_entity:
+        if not (before_entity := hass.states.get(before)):
             raise ConditionErrorMessage("time", f"unknown 'before' entity {before}")
-        before = dt_util.dt.time(
-            before_entity.attributes.get("hour", 23),
-            before_entity.attributes.get("minute", 59),
-            before_entity.attributes.get("second", 59),
-            999999,
-        )
+        if before_entity.domain == "input_datetime":
+            before = dt_util.dt.time(
+                before_entity.attributes.get("hour", 23),
+                before_entity.attributes.get("minute", 59),
+                before_entity.attributes.get("second", 59),
+            )
+        elif before_entity.attributes.get(
+            ATTR_DEVICE_CLASS
+        ) == DEVICE_CLASS_TIMESTAMP and before_entity.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        ):
+            before_timedatime = dt_util.parse_datetime(before_entity.state)
+            if before_timedatime is None:
+                return False
+            before = dt_util.as_local(before_timedatime).time()
+        else:
+            return False
 
     if after < before:
+        condition_trace_update_result(after=after, now_time=now_time, before=before)
         if not after <= now_time < before:
             return False
     else:
+        condition_trace_update_result(after=after, now_time=now_time, before=before)
         if before <= now_time < after:
             return False
 
     if weekday is not None:
         now_weekday = WEEKDAYS[now.weekday()]
 
+        condition_trace_update_result(weekday=weekday, now_weekday=now_weekday)
         if (
             isinstance(weekday, str)
             and weekday != now_weekday
@@ -732,12 +778,8 @@ def time(
     return True
 
 
-def time_from_config(
-    config: ConfigType, config_validation: bool = True
-) -> ConditionCheckerType:
+def time_from_config(config: ConfigType) -> ConditionCheckerType:
     """Wrap action method with time based condition."""
-    if config_validation:
-        config = cv.TIME_CONDITION_SCHEMA(config)
     before = config.get(CONF_BEFORE)
     after = config.get(CONF_AFTER)
     weekday = config.get(CONF_WEEKDAY)
@@ -752,8 +794,8 @@ def time_from_config(
 
 def zone(
     hass: HomeAssistant,
-    zone_ent: Union[None, str, State],
-    entity: Union[None, str, State],
+    zone_ent: None | str | State,
+    entity: None | str | State,
 ) -> bool:
     """Test if zone-condition matches.
 
@@ -764,9 +806,8 @@ def zone(
 
     if isinstance(zone_ent, str):
         zone_ent_id = zone_ent
-        zone_ent = hass.states.get(zone_ent)
 
-        if zone_ent is None:
+        if (zone_ent := hass.states.get(zone_ent)) is None:
             raise ConditionErrorMessage("zone", f"unknown zone {zone_ent_id}")
 
     if entity is None:
@@ -774,9 +815,8 @@ def zone(
 
     if isinstance(entity, str):
         entity_id = entity
-        entity = hass.states.get(entity)
 
-        if entity is None:
+        if (entity := hass.states.get(entity)) is None:
             raise ConditionErrorMessage("zone", f"unknown entity {entity_id}")
     else:
         entity_id = entity.entity_id
@@ -799,12 +839,8 @@ def zone(
     )
 
 
-def zone_from_config(
-    config: ConfigType, config_validation: bool = True
-) -> ConditionCheckerType:
+def zone_from_config(config: ConfigType) -> ConditionCheckerType:
     """Wrap action method with zone based condition."""
-    if config_validation:
-        config = cv.ZONE_CONDITION_SCHEMA(config)
     entity_ids = config.get(CONF_ENTITY_ID, [])
     zone_entity_ids = config.get(CONF_ZONE, [])
 
@@ -841,25 +877,65 @@ def zone_from_config(
 
 
 async def async_device_from_config(
-    hass: HomeAssistant, config: ConfigType, config_validation: bool = True
+    hass: HomeAssistant, config: ConfigType
 ) -> ConditionCheckerType:
     """Test a device condition."""
-    if config_validation:
-        config = cv.DEVICE_CONDITION_SCHEMA(config)
     platform = await async_get_device_automation_platform(
         hass, config[CONF_DOMAIN], "condition"
     )
     return trace_condition_function(
         cast(
             ConditionCheckerType,
-            platform.async_condition_from_config(config, config_validation),  # type: ignore
+            platform.async_condition_from_config(hass, config),  # type: ignore
         )
     )
 
 
+async def async_trigger_from_config(
+    hass: HomeAssistant, config: ConfigType
+) -> ConditionCheckerType:
+    """Test a trigger condition."""
+    trigger_id = config[CONF_ID]
+
+    @trace_condition_function
+    def trigger_if(hass: HomeAssistant, variables: TemplateVarsType = None) -> bool:
+        """Validate trigger based if-condition."""
+        return (
+            variables is not None
+            and "trigger" in variables
+            and variables["trigger"].get("id") in trigger_id
+        )
+
+    return trigger_if
+
+
+def numeric_state_validate_config(
+    hass: HomeAssistant, config: ConfigType
+) -> ConfigType:
+    """Validate numeric_state condition config."""
+
+    registry = er.async_get(hass)
+    config = dict(config)
+    config[CONF_ENTITY_ID] = er.async_resolve_entity_ids(
+        registry, cv.entity_ids_or_uuids(config[CONF_ENTITY_ID])
+    )
+    return config
+
+
+def state_validate_config(hass: HomeAssistant, config: ConfigType) -> ConfigType:
+    """Validate state condition config."""
+
+    registry = er.async_get(hass)
+    config = dict(config)
+    config[CONF_ENTITY_ID] = er.async_resolve_entity_ids(
+        registry, cv.entity_ids_or_uuids(config[CONF_ENTITY_ID])
+    )
+    return config
+
+
 async def async_validate_condition_config(
-    hass: HomeAssistant, config: Union[ConfigType, Template]
-) -> Union[ConfigType, Template]:
+    hass: HomeAssistant, config: ConfigType | Template
+) -> ConfigType | Template:
     """Validate config."""
     if isinstance(config, Template):
         return config
@@ -878,15 +954,32 @@ async def async_validate_condition_config(
         platform = await async_get_device_automation_platform(
             hass, config[CONF_DOMAIN], "condition"
         )
+        if hasattr(platform, "async_validate_condition_config"):
+            return await platform.async_validate_condition_config(hass, config)  # type: ignore
         return cast(ConfigType, platform.CONDITION_SCHEMA(config))  # type: ignore
+
+    if condition in ("numeric_state", "state"):
+        validator = getattr(
+            sys.modules[__name__], VALIDATE_CONFIG_FORMAT.format(condition)
+        )
+        return validator(hass, config)  # type: ignore
 
     return config
 
 
+async def async_validate_conditions_config(
+    hass: HomeAssistant, conditions: list[ConfigType | Template]
+) -> list[ConfigType | Template]:
+    """Validate config."""
+    return await asyncio.gather(
+        *(async_validate_condition_config(hass, cond) for cond in conditions)
+    )
+
+
 @callback
-def async_extract_entities(config: Union[ConfigType, Template]) -> Set[str]:
+def async_extract_entities(config: ConfigType | Template) -> set[str]:
     """Extract entities from a condition."""
-    referenced: Set[str] = set()
+    referenced: set[str] = set()
     to_process = deque([config])
 
     while to_process:
@@ -912,7 +1005,7 @@ def async_extract_entities(config: Union[ConfigType, Template]) -> Set[str]:
 
 
 @callback
-def async_extract_devices(config: Union[ConfigType, Template]) -> Set[str]:
+def async_extract_devices(config: ConfigType | Template) -> set[str]:
     """Extract devices from a condition."""
     referenced = set()
     to_process = deque([config])
@@ -931,9 +1024,7 @@ def async_extract_devices(config: Union[ConfigType, Template]) -> Set[str]:
         if condition != "device":
             continue
 
-        device_id = config.get(CONF_DEVICE_ID)
-
-        if device_id is not None:
+        if (device_id := config.get(CONF_DEVICE_ID)) is not None:
             referenced.add(device_id)
 
     return referenced

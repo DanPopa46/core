@@ -8,22 +8,23 @@ from freebox_api.exceptions import (
 )
 
 from homeassistant import data_entry_flow
+from homeassistant.components import zeroconf
 from homeassistant.components.freebox.const import DOMAIN
 from homeassistant.config_entries import SOURCE_IMPORT, SOURCE_USER, SOURCE_ZEROCONF
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.helpers.typing import HomeAssistantType
+from homeassistant.core import HomeAssistant
 
 from .const import MOCK_HOST, MOCK_PORT
 
 from tests.common import MockConfigEntry
 
-MOCK_ZEROCONF_DATA = {
-    "host": "192.168.0.254",
-    "port": 80,
-    "hostname": "Freebox-Server.local.",
-    "type": "_fbx-api._tcp.local.",
-    "name": "Freebox Server._fbx-api._tcp.local.",
-    "properties": {
+MOCK_ZEROCONF_DATA = zeroconf.ZeroconfServiceInfo(
+    host="192.168.0.254",
+    port=80,
+    hostname="Freebox-Server.local.",
+    type="_fbx-api._tcp.local.",
+    name="Freebox Server._fbx-api._tcp.local.",
+    properties={
         "api_version": "8.0",
         "device_type": "FreeboxServer1,2",
         "api_base_url": "/api/",
@@ -34,10 +35,10 @@ MOCK_ZEROCONF_DATA = {
         "box_model_name": "Freebox Server (r2)",
         "api_domain": MOCK_HOST,
     },
-}
+)
 
 
-async def test_user(hass: HomeAssistantType):
+async def test_user(hass: HomeAssistant):
     """Test user config."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
@@ -55,7 +56,7 @@ async def test_user(hass: HomeAssistantType):
     assert result["step_id"] == "link"
 
 
-async def test_import(hass: HomeAssistantType):
+async def test_import(hass: HomeAssistant):
     """Test import step."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -66,7 +67,7 @@ async def test_import(hass: HomeAssistantType):
     assert result["step_id"] == "link"
 
 
-async def test_zeroconf(hass: HomeAssistantType):
+async def test_zeroconf(hass: HomeAssistant):
     """Test zeroconf step."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -77,7 +78,7 @@ async def test_zeroconf(hass: HomeAssistantType):
     assert result["step_id"] == "link"
 
 
-async def test_link(hass: HomeAssistantType, router: Mock):
+async def test_link(hass: HomeAssistant, router: Mock):
     """Test linking."""
     with patch(
         "homeassistant.components.freebox.async_setup", return_value=True
@@ -102,7 +103,7 @@ async def test_link(hass: HomeAssistantType, router: Mock):
         assert len(mock_setup_entry.mock_calls) == 1
 
 
-async def test_abort_if_already_setup(hass: HomeAssistantType):
+async def test_abort_if_already_setup(hass: HomeAssistant):
     """Test we abort if component is already setup."""
     MockConfigEntry(
         domain=DOMAIN,
@@ -129,7 +130,7 @@ async def test_abort_if_already_setup(hass: HomeAssistantType):
     assert result["reason"] == "already_configured"
 
 
-async def test_on_link_failed(hass: HomeAssistantType):
+async def test_on_link_failed(hass: HomeAssistant):
     """Test when we have errors during linking the router."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,

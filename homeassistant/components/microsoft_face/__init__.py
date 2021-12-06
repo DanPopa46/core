@@ -231,7 +231,7 @@ class MicrosoftFaceGroupEntity(Entity):
         return False
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return device specific state attributes."""
         attr = {}
         for name, p_id in self._api.store[self._id].items():
@@ -299,7 +299,7 @@ class MicrosoftFace:
                 payload = None
 
         try:
-            with async_timeout.timeout(self.timeout):
+            async with async_timeout.timeout(self.timeout):
                 response = await getattr(self.websession, method)(
                     url, data=payload, headers=headers, params=params
                 )

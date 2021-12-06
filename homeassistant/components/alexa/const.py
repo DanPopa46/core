@@ -40,7 +40,6 @@ API_SCOPE = "scope"
 API_CHANGE = "change"
 API_PASSWORD = "password"
 
-CONF_DESCRIPTION = "description"
 CONF_DISPLAY_CATEGORIES = "display_categories"
 CONF_SUPPORTED_LOCALES = (
     "de-DE",
@@ -78,6 +77,9 @@ API_THERMOSTAT_MODES = OrderedDict(
 )
 API_THERMOSTAT_MODES_CUSTOM = {climate.HVAC_MODE_DRY: "DEHUMIDIFY"}
 API_THERMOSTAT_PRESETS = {climate.PRESET_ECO: "ECO"}
+
+# AlexaModeController does not like a single mode for the fan preset, we add PRESET_MODE_NA if a fan has only one preset_mode
+PRESET_MODE_NA = "-"
 
 
 class Cause:

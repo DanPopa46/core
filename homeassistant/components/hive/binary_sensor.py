@@ -9,8 +9,10 @@ from homeassistant.components.binary_sensor import (
     DEVICE_CLASS_SOUND,
     BinarySensorEntity,
 )
+from homeassistant.helpers.entity import DeviceInfo
 
-from . import ATTR_AVAILABLE, ATTR_MODE, DATA_HIVE, DOMAIN, HiveEntity
+from . import HiveEntity
+from .const import ATTR_MODE, DOMAIN
 
 DEVICETYPE = {
     "contactsensor": DEVICE_CLASS_OPENING,
@@ -24,13 +26,11 @@ PARALLEL_UPDATES = 0
 SCAN_INTERVAL = timedelta(seconds=15)
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the Hive Binary Sensor."""
-    if discovery_info is None:
-        return
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Set up Hive thermostat based on a config entry."""
 
-    hive = hass.data[DOMAIN].get(DATA_HIVE)
-    devices = hive.devices.get("binary_sensor")
+    hive = hass.data[DOMAIN][entry.entry_id]
+    devices = hive.session.deviceList.get("binary_sensor")
     entities = []
     if devices:
         for dev in devices:
@@ -47,9 +47,16 @@ class HiveBinarySensorEntity(HiveEntity, BinarySensorEntity):
         return self._unique_id
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return device information."""
-        return {"identifiers": {(DOMAIN, self.unique_id)}, "name": self.name}
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.device["device_id"])},
+            manufacturer=self.device["deviceData"]["manufacturer"],
+            model=self.device["deviceData"]["model"],
+            name=self.device["device_name"],
+            sw_version=self.device["deviceData"]["version"],
+            via_device=(DOMAIN, self.device["parentDevice"]),
+        )
 
     @property
     def device_class(self):
@@ -69,10 +76,9 @@ class HiveBinarySensorEntity(HiveEntity, BinarySensorEntity):
         return True
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Show Device Attributes."""
         return {
-            ATTR_AVAILABLE: self.attributes.get(ATTR_AVAILABLE),
             ATTR_MODE: self.attributes.get(ATTR_MODE),
         }
 
@@ -84,5 +90,5 @@ class HiveBinarySensorEntity(HiveEntity, BinarySensorEntity):
     async def async_update(self):
         """Update all Node data from Hive."""
         await self.hive.session.updateData(self.device)
-        self.device = await self.hive.sensor.get_sensor(self.device)
+        self.device = await self.hive.sensor.getSensor(self.device)
         self.attributes = self.device.get("attributes", {})

@@ -5,7 +5,7 @@ from hlk_sw16 import create_hlk_sw16_connection
 import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_IMPORT
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT, CONF_SWITCHES
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT, CONF_SWITCHES, Platform
 from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import (
@@ -23,6 +23,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+PLATFORMS = [Platform.SWITCH]
 
 DATA_DEVICE_REGISTER = "hlk_sw16_device_register"
 DATA_DEVICE_LISTENER = "hlk_sw16_device_listener"
@@ -111,9 +113,7 @@ async def async_setup_entry(hass, entry):
         hass.data[DOMAIN][entry.entry_id][DATA_DEVICE_REGISTER] = client
 
         # Load entities
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(entry, "switch")
-        )
+        hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
         _LOGGER.info("Connected to HLK-SW16 device: %s", address)
 
@@ -126,8 +126,7 @@ async def async_unload_entry(hass, entry):
     """Unload a config entry."""
     client = hass.data[DOMAIN][entry.entry_id].pop(DATA_DEVICE_REGISTER)
     client.stop()
-    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "switch")
-
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         if hass.data[DOMAIN][entry.entry_id]:
             hass.data[DOMAIN].pop(entry.entry_id)

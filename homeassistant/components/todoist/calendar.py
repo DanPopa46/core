@@ -1,4 +1,6 @@
 """Support for Todoist task management (https://todoist.com)."""
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 import logging
 
@@ -226,15 +228,16 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     )
 
 
-def _parse_due_date(data: dict) -> datetime:
+def _parse_due_date(data: dict, gmt_string) -> datetime | None:
     """Parse the due date dict into a datetime object."""
     # Add time information to date only strings.
     if len(data["date"]) == 10:
-        data["date"] += "T00:00:00"
-    # If there is no timezone provided, use UTC.
-    if data["timezone"] is None:
-        data["date"] += "Z"
-    return dt.parse_datetime(data["date"])
+        return datetime.fromisoformat(data["date"]).replace(tzinfo=dt.UTC)
+    if not (nowtime := dt.parse_datetime(data["date"])):
+        return None
+    if nowtime.tzinfo is None:
+        data["date"] += gmt_string
+    return dt.as_utc(nowtime)
 
 
 class TodoistProjectDevice(CalendarEventDevice):
@@ -285,7 +288,7 @@ class TodoistProjectDevice(CalendarEventDevice):
         return await self.data.async_get_events(hass, start_date, end_date)
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the device state attributes."""
         if self.data.event is None:
             # No tasks, we don't REALLY need to show anything.
@@ -386,7 +389,7 @@ class TodoistProjectData:
         task[SUMMARY] = data[CONTENT]
         task[COMPLETED] = data[CHECKED] == 1
         task[PRIORITY] = data[PRIORITY]
-        task[DESCRIPTION] = "https://todoist.com/showTask?id={}".format(data[ID])
+        task[DESCRIPTION] = f"https://todoist.com/showTask?id={data[ID]}"
 
         # All task Labels (optional parameter).
         task[LABELS] = [
@@ -407,7 +410,9 @@ class TodoistProjectData:
         # Generally speaking, that means right now.
         task[START] = dt.utcnow()
         if data[DUE] is not None:
-            task[END] = _parse_due_date(data[DUE])
+            task[END] = _parse_due_date(
+                data[DUE], self._api.state["user"]["tz_info"]["gmt_string"]
+            )
 
             if self._due_date_days is not None and (
                 task[END] > dt.utcnow() + self._due_date_days
@@ -416,7 +421,7 @@ class TodoistProjectData:
                 # it shouldn't be counted.
                 return None
 
-            task[DUE_TODAY] = task[END].date() == datetime.today().date()
+            task[DUE_TODAY] = task[END].date() == dt.utcnow().date()
 
             # Special case: Task is overdue.
             if task[END] <= task[START]:
@@ -529,9 +534,21 @@ class TodoistProjectData:
         for task in project_task_data:
             if task["due"] is None:
                 continue
-            due_date = _parse_due_date(task["due"])
+            due_date = _parse_due_date(
+                task["due"], self._api.state["user"]["tz_info"]["gmt_string"]
+            )
+            if not due_date:
+                continue
+            midnight = dt.as_utc(
+                dt.parse_datetime(
+                    due_date.strftime("%Y-%m-%d")
+                    + "T00:00:00"
+                    + self._api.state["user"]["tz_info"]["gmt_string"]
+                )
+            )
+
             if start_date < due_date < end_date:
-                if due_date.hour == 0 and due_date.minute == 0:
+                if due_date == midnight:
                     # If the due date has no time data, return just the date so that it
                     # will render correctly as an all day event on a calendar.
                     due_date_value = due_date.strftime("%Y-%m-%d")

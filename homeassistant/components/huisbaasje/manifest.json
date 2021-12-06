@@ -6,5 +6,8 @@
   "requirements": [
     "huisbaasje-client==0.1.0"
   ],
-  "codeowners": ["@denniss17"]
+  "codeowners": [
+    "@dennisschroer"
+  ],
+  "iot_class": "cloud_polling"
 }

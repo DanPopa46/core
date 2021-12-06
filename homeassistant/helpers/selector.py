@@ -1,5 +1,8 @@
 """Selectors for Home Assistant."""
-from typing import Any, Callable, Dict, cast
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, cast
 
 import voluptuous as vol
 
@@ -9,7 +12,7 @@ from homeassistant.util import decorator
 SELECTORS = decorator.Registry()
 
 
-def validate_selector(config: Any) -> Dict:
+def validate_selector(config: Any) -> dict:
     """Validate a selector."""
     if not isinstance(config, dict):
         raise vol.Invalid("Expected a dictionary")
@@ -19,9 +22,7 @@ def validate_selector(config: Any) -> Dict:
 
     selector_type = list(config)[0]
 
-    selector_class = SELECTORS.get(selector_type)
-
-    if selector_class is None:
+    if (selector_class := SELECTORS.get(selector_type)) is None:
         raise vol.Invalid(f"Unknown selector type {selector_type} found")
 
     # Selectors can be empty
@@ -29,7 +30,7 @@ def validate_selector(config: Any) -> Dict:
         return {selector_type: {}}
 
     return {
-        selector_type: cast(Dict, selector_class.CONFIG_SCHEMA(config[selector_type]))
+        selector_type: cast(dict, selector_class.CONFIG_SCHEMA(config[selector_type]))
     }
 
 
@@ -68,9 +69,7 @@ class DeviceSelector(Selector):
             # Model of device
             vol.Optional("model"): str,
             # Device has to contain entities matching this selector
-            vol.Optional(
-                "entity"
-            ): EntitySelector.CONFIG_SCHEMA,  # pylint: disable=no-member
+            vol.Optional("entity"): EntitySelector.CONFIG_SCHEMA,
         }
     )
 

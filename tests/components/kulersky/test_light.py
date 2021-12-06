@@ -3,19 +3,23 @@ from unittest.mock import MagicMock, patch
 
 import pykulersky
 import pytest
+from pytest import approx
 
-from homeassistant import setup
-from homeassistant.components.kulersky.light import DOMAIN
+from homeassistant.components.kulersky.const import (
+    DATA_ADDRESSES,
+    DATA_DISCOVERY_SUBSCRIPTION,
+    DOMAIN,
+)
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
+    ATTR_COLOR_MODE,
     ATTR_HS_COLOR,
     ATTR_RGB_COLOR,
-    ATTR_WHITE_VALUE,
+    ATTR_RGBW_COLOR,
+    ATTR_SUPPORTED_COLOR_MODES,
     ATTR_XY_COLOR,
+    COLOR_MODE_RGBW,
     SCAN_INTERVAL,
-    SUPPORT_BRIGHTNESS,
-    SUPPORT_COLOR,
-    SUPPORT_WHITE_VALUE,
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -39,7 +43,6 @@ async def mock_entry(hass):
 @pytest.fixture
 async def mock_light(hass, mock_entry):
     """Create a mock light entity."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
 
     light = MagicMock(spec=pykulersky.Light)
     light.address = "AA:BB:CC:11:22:33"
@@ -63,11 +66,10 @@ async def test_init(hass, mock_light):
     """Test platform setup."""
     state = hass.states.get("light.bedroom")
     assert state.state == STATE_OFF
-    assert state.attributes == {
+    assert dict(state.attributes) == {
         ATTR_FRIENDLY_NAME: "Bedroom",
-        ATTR_SUPPORTED_FEATURES: SUPPORT_BRIGHTNESS
-        | SUPPORT_COLOR
-        | SUPPORT_WHITE_VALUE,
+        ATTR_SUPPORTED_COLOR_MODES: [COLOR_MODE_RGBW],
+        ATTR_SUPPORTED_FEATURES: 0,
     }
 
     with patch.object(hass.loop, "stop"):
@@ -79,9 +81,13 @@ async def test_init(hass, mock_light):
 
 async def test_remove_entry(hass, mock_light, mock_entry):
     """Test platform setup."""
+    assert hass.data[DOMAIN][DATA_ADDRESSES] == {"AA:BB:CC:11:22:33"}
+    assert DATA_DISCOVERY_SUBSCRIPTION in hass.data[DOMAIN]
+
     await hass.config_entries.async_remove(mock_entry.entry_id)
 
     assert mock_light.disconnect.called
+    assert DOMAIN not in hass.data
 
 
 async def test_remove_entry_exceptions_caught(hass, mock_light, mock_entry):
@@ -94,7 +100,6 @@ async def test_remove_entry_exceptions_caught(hass, mock_light, mock_entry):
 
 async def test_update_exception(hass, mock_light):
     """Test platform setup."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
 
     mock_light.get_color.side_effect = pykulersky.PykulerskyException
     await hass.helpers.entity_component.async_update_entity("light.bedroom")
@@ -115,7 +120,7 @@ async def test_light_turn_on(hass, mock_light):
     await hass.async_block_till_done()
     mock_light.set_color.assert_called_with(255, 255, 255, 255)
 
-    mock_light.get_color.return_value = (50, 50, 50, 255)
+    mock_light.get_color.return_value = (50, 50, 50, 50)
     await hass.services.async_call(
         "light",
         "turn_on",
@@ -123,9 +128,33 @@ async def test_light_turn_on(hass, mock_light):
         blocking=True,
     )
     await hass.async_block_till_done()
-    mock_light.set_color.assert_called_with(50, 50, 50, 255)
+    mock_light.set_color.assert_called_with(50, 50, 50, 50)
 
-    mock_light.get_color.return_value = (50, 45, 25, 255)
+    mock_light.get_color.return_value = (50, 25, 13, 6)
+    await hass.services.async_call(
+        "light",
+        "turn_on",
+        {ATTR_ENTITY_ID: "light.bedroom", ATTR_RGBW_COLOR: (255, 128, 64, 32)},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    mock_light.set_color.assert_called_with(50, 25, 13, 6)
+
+    # RGB color is converted to RGBW by assigning the white component to the white
+    # channel, see color_rgb_to_rgbw
+    mock_light.get_color.return_value = (0, 17, 50, 17)
+    await hass.services.async_call(
+        "light",
+        "turn_on",
+        {ATTR_ENTITY_ID: "light.bedroom", ATTR_RGB_COLOR: (64, 128, 255)},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    mock_light.set_color.assert_called_with(0, 17, 50, 17)
+
+    # HS color is converted to RGBW by assigning the white component to the white
+    # channel, see color_rgb_to_rgbw
+    mock_light.get_color.return_value = (50, 41, 0, 50)
     await hass.services.async_call(
         "light",
         "turn_on",
@@ -133,18 +162,7 @@ async def test_light_turn_on(hass, mock_light):
         blocking=True,
     )
     await hass.async_block_till_done()
-
-    mock_light.set_color.assert_called_with(50, 45, 25, 255)
-
-    mock_light.get_color.return_value = (220, 201, 110, 180)
-    await hass.services.async_call(
-        "light",
-        "turn_on",
-        {ATTR_ENTITY_ID: "light.bedroom", ATTR_WHITE_VALUE: 180},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-    mock_light.set_color.assert_called_with(50, 45, 25, 180)
+    mock_light.set_color.assert_called_with(50, 41, 0, 50)
 
 
 async def test_light_turn_off(hass, mock_light):
@@ -166,11 +184,10 @@ async def test_light_update(hass, mock_light):
 
     state = hass.states.get("light.bedroom")
     assert state.state == STATE_OFF
-    assert state.attributes == {
+    assert dict(state.attributes) == {
         ATTR_FRIENDLY_NAME: "Bedroom",
-        ATTR_SUPPORTED_FEATURES: SUPPORT_BRIGHTNESS
-        | SUPPORT_COLOR
-        | SUPPORT_WHITE_VALUE,
+        ATTR_SUPPORTED_COLOR_MODES: [COLOR_MODE_RGBW],
+        ATTR_SUPPORTED_FEATURES: 0,
     }
 
     # Test an exception during discovery
@@ -181,11 +198,50 @@ async def test_light_update(hass, mock_light):
 
     state = hass.states.get("light.bedroom")
     assert state.state == STATE_UNAVAILABLE
-    assert state.attributes == {
+    assert dict(state.attributes) == {
         ATTR_FRIENDLY_NAME: "Bedroom",
-        ATTR_SUPPORTED_FEATURES: SUPPORT_BRIGHTNESS
-        | SUPPORT_COLOR
-        | SUPPORT_WHITE_VALUE,
+        ATTR_SUPPORTED_COLOR_MODES: [COLOR_MODE_RGBW],
+        ATTR_SUPPORTED_FEATURES: 0,
+    }
+
+    mock_light.get_color.side_effect = None
+    mock_light.get_color.return_value = (80, 160, 255, 0)
+    utcnow = utcnow + SCAN_INTERVAL
+    async_fire_time_changed(hass, utcnow)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("light.bedroom")
+    assert state.state == STATE_ON
+    assert dict(state.attributes) == {
+        ATTR_FRIENDLY_NAME: "Bedroom",
+        ATTR_SUPPORTED_COLOR_MODES: [COLOR_MODE_RGBW],
+        ATTR_SUPPORTED_FEATURES: 0,
+        ATTR_COLOR_MODE: COLOR_MODE_RGBW,
+        ATTR_BRIGHTNESS: 255,
+        ATTR_HS_COLOR: (approx(212.571), approx(68.627)),
+        ATTR_RGB_COLOR: (80, 160, 255),
+        ATTR_RGBW_COLOR: (80, 160, 255, 0),
+        ATTR_XY_COLOR: (approx(0.17), approx(0.193)),
+    }
+
+    mock_light.get_color.side_effect = None
+    mock_light.get_color.return_value = (80, 160, 200, 255)
+    utcnow = utcnow + SCAN_INTERVAL
+    async_fire_time_changed(hass, utcnow)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("light.bedroom")
+    assert state.state == STATE_ON
+    assert dict(state.attributes) == {
+        ATTR_FRIENDLY_NAME: "Bedroom",
+        ATTR_SUPPORTED_COLOR_MODES: [COLOR_MODE_RGBW],
+        ATTR_SUPPORTED_FEATURES: 0,
+        ATTR_COLOR_MODE: COLOR_MODE_RGBW,
+        ATTR_BRIGHTNESS: 255,
+        ATTR_HS_COLOR: (approx(199.701), approx(26.275)),
+        ATTR_RGB_COLOR: (188, 233, 255),
+        ATTR_RGBW_COLOR: (80, 160, 200, 255),
+        ATTR_XY_COLOR: (approx(0.259), approx(0.306)),
     }
 
     mock_light.get_color.side_effect = None
@@ -196,14 +252,14 @@ async def test_light_update(hass, mock_light):
 
     state = hass.states.get("light.bedroom")
     assert state.state == STATE_ON
-    assert state.attributes == {
+    assert dict(state.attributes) == {
         ATTR_FRIENDLY_NAME: "Bedroom",
-        ATTR_SUPPORTED_FEATURES: SUPPORT_BRIGHTNESS
-        | SUPPORT_COLOR
-        | SUPPORT_WHITE_VALUE,
-        ATTR_BRIGHTNESS: 200,
-        ATTR_HS_COLOR: (200, 60),
-        ATTR_RGB_COLOR: (102, 203, 255),
-        ATTR_WHITE_VALUE: 240,
-        ATTR_XY_COLOR: (0.184, 0.261),
+        ATTR_SUPPORTED_COLOR_MODES: [COLOR_MODE_RGBW],
+        ATTR_SUPPORTED_FEATURES: 0,
+        ATTR_COLOR_MODE: COLOR_MODE_RGBW,
+        ATTR_BRIGHTNESS: 240,
+        ATTR_HS_COLOR: (approx(200.0), approx(27.059)),
+        ATTR_RGB_COLOR: (186, 232, 255),
+        ATTR_RGBW_COLOR: (85, 170, 212, 255),
+        ATTR_XY_COLOR: (approx(0.257), approx(0.305)),
     }

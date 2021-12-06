@@ -5,11 +5,10 @@ from pydelijn.api import Passages
 from pydelijn.common import HttpException
 import voluptuous as vol
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.const import ATTR_ATTRIBUTION, CONF_API_KEY, DEVICE_CLASS_TIMESTAMP
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.entity import Entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,8 +57,10 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     async_add_entities(sensors, True)
 
 
-class DeLijnPublicTransportSensor(Entity):
+class DeLijnPublicTransportSensor(SensorEntity):
     """Representation of a Ruter sensor."""
+
+    _attr_device_class = DEVICE_CLASS_TIMESTAMP
 
     def __init__(self, line):
         """Initialize the sensor."""
@@ -81,6 +82,10 @@ class DeLijnPublicTransportSensor(Entity):
 
         self._attributes["stopname"] = self._name
 
+        if not self.line.passages:
+            self._available = False
+            return
+
         try:
             first = self.line.passages[0]
             if first["due_at_realtime"] is not None:
@@ -96,8 +101,8 @@ class DeLijnPublicTransportSensor(Entity):
             self._attributes["is_realtime"] = first["is_realtime"]
             self._attributes["next_passages"] = self.line.passages
             self._available = True
-        except (KeyError, IndexError):
-            _LOGGER.error("Invalid data received from De Lijn")
+        except (KeyError) as error:
+            _LOGGER.error("Invalid data received from De Lijn: %s", error)
             self._available = False
 
     @property
@@ -106,17 +111,12 @@ class DeLijnPublicTransportSensor(Entity):
         return self._available
 
     @property
-    def device_class(self):
-        """Return the device class."""
-        return DEVICE_CLASS_TIMESTAMP
-
-    @property
     def name(self):
         """Return the name of the sensor."""
         return self._name
 
     @property
-    def state(self):
+    def native_value(self):
         """Return the state of the sensor."""
         return self._state
 
@@ -126,6 +126,6 @@ class DeLijnPublicTransportSensor(Entity):
         return "mdi:bus"
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return attributes for the sensor."""
         return self._attributes

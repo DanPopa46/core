@@ -3,16 +3,34 @@ from itertools import product
 
 from homeassistant.const import (
     DEGREE,
+    ELECTRIC_POTENTIAL_VOLT,
     PERCENTAGE,
     TEMP_CELSIUS,
     TEMP_FAHRENHEIT,
     TEMP_KELVIN,
-    VOLT,
+    Platform,
 )
+
+PLATFORMS = [
+    Platform.BINARY_SENSOR,
+    Platform.CLIMATE,
+    Platform.COVER,
+    Platform.LIGHT,
+    Platform.SCENE,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 DOMAIN = "lcn"
 DATA_LCN = "lcn"
 DEFAULT_NAME = "pchk"
+
+CONNECTION = "connection"
+CONF_HARDWARE_SERIAL = "hardware_serial"
+CONF_SOFTWARE_SERIAL = "software_serial"
+CONF_HARDWARE_TYPE = "hardware_type"
+CONF_RESOURCE = "resource"
+CONF_DOMAIN_DATA = "domain_data"
 
 CONF_CONNECTIONS = "connections"
 CONF_SK_NUM_TRIES = "sk_num_tries"
@@ -162,7 +180,7 @@ VAR_UNITS = [
     "PERCENT",
     "PPM",
     "VOLT",
-    VOLT,
+    ELECTRIC_POTENTIAL_VOLT,
     "AMPERE",
     "AMP",
     "A",

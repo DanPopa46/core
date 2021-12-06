@@ -1,13 +1,12 @@
 """Test the Home Assistant Supervisor config flow."""
 from unittest.mock import patch
 
-from homeassistant import setup
 from homeassistant.components.hassio import DOMAIN
 
 
 async def test_config_flow(hass):
     """Test we get the form."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     with patch(
         "homeassistant.components.hassio.async_setup", return_value=True
     ) as mock_setup, patch(
@@ -18,7 +17,7 @@ async def test_config_flow(hass):
             DOMAIN, context={"source": "system"}
         )
         assert result["type"] == "create_entry"
-        assert result["title"] == DOMAIN.title()
+        assert result["title"] == "Supervisor"
         assert result["data"] == {}
         await hass.async_block_till_done()
 

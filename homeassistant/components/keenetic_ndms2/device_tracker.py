@@ -1,7 +1,8 @@
 """Support for Keenetic routers as device tracker."""
+from __future__ import annotations
+
 from datetime import timedelta
 import logging
-from typing import List, Optional, Set
 
 from ndms2_client import Device
 import voluptuous as vol
@@ -25,6 +26,7 @@ from homeassistant.helpers import entity_registry
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo
 import homeassistant.util.dt as dt_util
 
 from .const import (
@@ -57,8 +59,8 @@ async def async_get_scanner(hass: HomeAssistant, config):
     """Import legacy configuration from YAML."""
 
     scanner_config = config[DEVICE_TRACKER_DOMAIN]
-    scan_interval: Optional[timedelta] = scanner_config.get(CONF_SCAN_INTERVAL)
-    consider_home: Optional[timedelta] = scanner_config.get(CONF_CONSIDER_HOME)
+    scan_interval: timedelta | None = scanner_config.get(CONF_SCAN_INTERVAL)
+    consider_home: timedelta | None = scanner_config.get(CONF_CONSIDER_HOME)
 
     host: str = scanner_config[CONF_HOST]
     hass.data[DOMAIN][f"imported_options_{host}"] = {
@@ -139,9 +141,9 @@ async def async_setup_entry(
 
 
 @callback
-def update_items(router: KeeneticRouter, async_add_entities, tracked: Set[str]):
+def update_items(router: KeeneticRouter, async_add_entities, tracked: set[str]):
     """Update tracked device state from the hub."""
-    new_tracked: List[KeeneticTracker] = []
+    new_tracked: list[KeeneticTracker] = []
     for mac, device in router.last_devices.items():
         if mac not in tracked:
             tracked.add(mac)
@@ -154,7 +156,7 @@ def update_items(router: KeeneticRouter, async_add_entities, tracked: Set[str]):
 class KeeneticTracker(ScannerEntity):
     """Representation of network device."""
 
-    def __init__(self, device: Device, router: KeeneticRouter):
+    def __init__(self, device: Device, router: KeeneticRouter) -> None:
         """Initialize the tracked device."""
         self._device = device
         self._router = router
@@ -207,7 +209,7 @@ class KeeneticTracker(ScannerEntity):
         return self._router.available
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the device state attributes."""
         if self.is_connected:
             return {
@@ -216,17 +218,13 @@ class KeeneticTracker(ScannerEntity):
         return None
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return a client description for device registry."""
-        info = {
-            "connections": {(CONNECTION_NETWORK_MAC, self._device.mac)},
-            "identifiers": {(DOMAIN, self._device.mac)},
-        }
-
-        if self._device.name:
-            info["name"] = self._device.name
-
-        return info
+        return DeviceInfo(
+            connections={(CONNECTION_NETWORK_MAC, self._device.mac)},
+            identifiers={(DOMAIN, self._device.mac)},
+            name=self._device.name if self._device.name else None,
+        )
 
     async def async_added_to_hass(self):
         """Client entity created."""

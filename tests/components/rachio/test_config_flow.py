@@ -1,7 +1,8 @@
 """Test the Rachio config flow."""
 from unittest.mock import MagicMock, patch
 
-from homeassistant import config_entries, setup
+from homeassistant import config_entries
+from homeassistant.components import zeroconf
 from homeassistant.components.rachio.const import (
     CONF_CUSTOM_URL,
     CONF_MANUAL_RUN_MINS,
@@ -23,7 +24,7 @@ def _mock_rachio_return_value(get=None, info=None):
 
 async def test_form(hass):
     """Test we get the form."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -38,8 +39,6 @@ async def test_form(hass):
     with patch(
         "homeassistant.components.rachio.config_flow.Rachio", return_value=rachio_mock
     ), patch(
-        "homeassistant.components.rachio.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.rachio.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
@@ -60,7 +59,6 @@ async def test_form(hass):
         CONF_CUSTOM_URL: "http://custom.url",
         CONF_MANUAL_RUN_MINS: 5,
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -110,12 +108,18 @@ async def test_form_cannot_connect(hass):
 
 async def test_form_homekit(hass):
     """Test that we abort from homekit if rachio is already setup."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": "homekit"},
-        data={"properties": {"id": "AA:BB:CC:DD:EE:FF"}},
+        context={"source": config_entries.SOURCE_HOMEKIT},
+        data=zeroconf.ZeroconfServiceInfo(
+            host="mock_host",
+            hostname="mock_hostname",
+            name="mock_name",
+            port=None,
+            properties={zeroconf.ATTR_PROPERTIES_ID: "AA:BB:CC:DD:EE:FF"},
+            type="mock_type",
+        ),
     )
     assert result["type"] == "form"
     assert result["errors"] == {}
@@ -131,8 +135,15 @@ async def test_form_homekit(hass):
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": "homekit"},
-        data={"properties": {"id": "AA:BB:CC:DD:EE:FF"}},
+        context={"source": config_entries.SOURCE_HOMEKIT},
+        data=zeroconf.ZeroconfServiceInfo(
+            host="mock_host",
+            hostname="mock_hostname",
+            name="mock_name",
+            port=None,
+            properties={zeroconf.ATTR_PROPERTIES_ID: "AA:BB:CC:DD:EE:FF"},
+            type="mock_type",
+        ),
     )
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"

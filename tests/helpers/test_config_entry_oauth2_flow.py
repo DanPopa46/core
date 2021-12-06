@@ -99,9 +99,10 @@ def test_inherit_enforces_domain_set():
             """Return logger."""
             return logging.getLogger(__name__)
 
-    with patch.dict(config_entries.HANDLERS, {TEST_DOMAIN: TestFlowHandler}):
-        with pytest.raises(TypeError):
-            TestFlowHandler()
+    with patch.dict(
+        config_entries.HANDLERS, {TEST_DOMAIN: TestFlowHandler}
+    ), pytest.raises(TypeError):
+        TestFlowHandler()
 
 
 async def test_abort_if_no_implementation(hass, flow_handler):
@@ -113,7 +114,9 @@ async def test_abort_if_no_implementation(hass, flow_handler):
     assert result["reason"] == "missing_configuration"
 
 
-async def test_abort_if_authorization_timeout(hass, flow_handler, local_impl):
+async def test_abort_if_authorization_timeout(
+    hass, flow_handler, local_impl, current_request_with_host
+):
     """Check timeout generating authorization url."""
     flow_handler.async_register_implementation(hass, local_impl)
 
@@ -129,7 +132,9 @@ async def test_abort_if_authorization_timeout(hass, flow_handler, local_impl):
     assert result["reason"] == "authorize_url_timeout"
 
 
-async def test_abort_if_no_url_available(hass, flow_handler, local_impl):
+async def test_abort_if_no_url_available(
+    hass, flow_handler, local_impl, current_request_with_host
+):
     """Check no_url_available generating authorization url."""
     flow_handler.async_register_implementation(hass, local_impl)
 
@@ -149,7 +154,7 @@ async def test_abort_if_oauth_error(
     hass,
     flow_handler,
     local_impl,
-    aiohttp_client,
+    hass_client_no_auth,
     aioclient_mock,
     current_request_with_host,
 ):
@@ -186,7 +191,7 @@ async def test_abort_if_oauth_error(
         f"&state={state}&scope=read+write"
     )
 
-    client = await aiohttp_client(hass.http.app)
+    client = await hass_client_no_auth()
     resp = await client.get(f"/auth/external/callback?code=abcd&state={state}")
     assert resp.status == 200
     assert resp.headers["content-type"] == "text/html; charset=utf-8"
@@ -215,7 +220,9 @@ async def test_step_discovery(hass, flow_handler, local_impl):
     )
 
     result = await hass.config_entries.flow.async_init(
-        TEST_DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}
+        TEST_DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=data_entry_flow.BaseServiceInfo(),
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
@@ -230,14 +237,18 @@ async def test_abort_discovered_multiple(hass, flow_handler, local_impl):
     )
 
     result = await hass.config_entries.flow.async_init(
-        TEST_DOMAIN, context={"source": config_entries.SOURCE_SSDP}
+        TEST_DOMAIN,
+        context={"source": config_entries.SOURCE_SSDP},
+        data=data_entry_flow.BaseServiceInfo(),
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
     assert result["step_id"] == "pick_implementation"
 
     result = await hass.config_entries.flow.async_init(
-        TEST_DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}
+        TEST_DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=data_entry_flow.BaseServiceInfo(),
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_ABORT
@@ -258,7 +269,9 @@ async def test_abort_discovered_existing_entries(hass, flow_handler, local_impl)
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.flow.async_init(
-        TEST_DOMAIN, context={"source": config_entries.SOURCE_SSDP}
+        TEST_DOMAIN,
+        context={"source": config_entries.SOURCE_SSDP},
+        data=data_entry_flow.BaseServiceInfo(),
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_ABORT
@@ -269,7 +282,7 @@ async def test_full_flow(
     hass,
     flow_handler,
     local_impl,
-    aiohttp_client,
+    hass_client_no_auth,
     aioclient_mock,
     current_request_with_host,
 ):
@@ -306,7 +319,7 @@ async def test_full_flow(
         f"&state={state}&scope=read+write"
     )
 
-    client = await aiohttp_client(hass.http.app)
+    client = await hass_client_no_auth()
     resp = await client.get(f"/auth/external/callback?code=abcd&state={state}")
     assert resp.status == 200
     assert resp.headers["content-type"] == "text/html; charset=utf-8"

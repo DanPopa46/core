@@ -1,10 +1,12 @@
 """Helper classes for Google Assistant integration."""
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from asyncio import gather
 from collections.abc import Mapping
+from http import HTTPStatus
 import logging
 import pprint
-from typing import Dict, List, Optional, Tuple
 
 from aiohttp.web import json_response
 
@@ -17,6 +19,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import Context, HomeAssistant, State, callback
+from homeassistant.helpers import start
 from homeassistant.helpers.area_registry import AreaEntry
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.entity_registry import RegistryEntry
@@ -44,21 +47,20 @@ _LOGGER = logging.getLogger(__name__)
 
 async def _get_entity_and_device(
     hass, entity_id
-) -> Optional[Tuple[RegistryEntry, DeviceEntry]]:
+) -> tuple[RegistryEntry, DeviceEntry] | None:
     """Fetch the entity and device entries for a entity_id."""
     dev_reg, ent_reg = await gather(
         hass.helpers.device_registry.async_get_registry(),
         hass.helpers.entity_registry.async_get_registry(),
     )
 
-    entity_entry = ent_reg.async_get(entity_id)
-    if not entity_entry:
+    if not (entity_entry := ent_reg.async_get(entity_id)):
         return None, None
     device_entry = dev_reg.devices.get(entity_entry.device_id)
     return entity_entry, device_entry
 
 
-async def _get_area(hass, entity_entry, device_entry) -> Optional[AreaEntry]:
+async def _get_area(hass, entity_entry, device_entry) -> AreaEntry | None:
     """Calculate the area for an entity."""
     if entity_entry and entity_entry.area_id:
         area_id = entity_entry.area_id
@@ -71,7 +73,7 @@ async def _get_area(hass, entity_entry, device_entry) -> Optional[AreaEntry]:
     return area_reg.areas.get(area_id)
 
 
-async def _get_device_info(device_entry) -> Optional[Dict[str, str]]:
+async def _get_device_info(device_entry) -> dict[str, str] | None:
     """Retrieve the device info for a device."""
     if not device_entry:
         return None
@@ -102,6 +104,15 @@ class AbstractConfig(ABC):
         """Perform async initialization of config."""
         self._store = GoogleConfigStore(self.hass)
         await self._store.async_load()
+
+        if not self.enabled:
+            return
+
+        async def sync_google(_):
+            """Sync entities to Google."""
+            await self.async_sync_entities_all()
+
+        start.async_at_start(self.hass, sync_google)
 
     @property
     def enabled(self):
@@ -192,15 +203,18 @@ class AbstractConfig(ABC):
         """Sync all entities to Google."""
         # Remove any pending sync
         self._google_sync_unsub.pop(agent_user_id, lambda: None)()
-        return await self._async_request_sync_devices(agent_user_id)
+        status = await self._async_request_sync_devices(agent_user_id)
+        if status == HTTPStatus.NOT_FOUND:
+            await self.async_disconnect_agent_user(agent_user_id)
+        return status
 
     async def async_sync_entities_all(self):
         """Sync all entities to Google for all registered agents."""
         res = await gather(
-            *[
+            *(
                 self.async_sync_entities(agent_user_id)
                 for agent_user_id in self._store.agent_user_ids
-            ]
+            )
         )
         return max(res, default=204)
 
@@ -249,18 +263,20 @@ class AbstractConfig(ABC):
     @callback
     def async_enable_local_sdk(self):
         """Enable the local SDK."""
-        webhook_id = self.local_sdk_webhook_id
-
-        if webhook_id is None:
+        if (webhook_id := self.local_sdk_webhook_id) is None:
             return
 
-        webhook.async_register(
-            self.hass,
-            DOMAIN,
-            "Local Support",
-            webhook_id,
-            self._handle_local_webhook,
-        )
+        try:
+            webhook.async_register(
+                self.hass,
+                DOMAIN,
+                "Local Support",
+                webhook_id,
+                self._handle_local_webhook,
+            )
+        except ValueError:
+            _LOGGER.info("Webhook handler is already defined!")
+            return
 
         self._local_sdk_active = True
 
@@ -330,8 +346,7 @@ class GoogleConfigStore:
 
     async def async_load(self):
         """Store current configuration to disk."""
-        data = await self._store.async_load()
-        if data:
+        if data := await self._store.async_load():
             self._data = data
 
 
@@ -344,8 +359,8 @@ class RequestData:
         user_id: str,
         source: str,
         request_id: str,
-        devices: Optional[List[dict]],
-    ):
+        devices: list[dict] | None,
+    ) -> None:
         """Initialize the request data."""
         self.config = config
         self.source = source
@@ -369,7 +384,9 @@ def get_google_type(domain, device_class):
 class GoogleEntity:
     """Adaptation of Entity expressed in Google's terms."""
 
-    def __init__(self, hass: HomeAssistant, config: AbstractConfig, state: State):
+    def __init__(
+        self, hass: HomeAssistant, config: AbstractConfig, state: State
+    ) -> None:
         """Initialize a Google entity."""
         self.hass = hass
         self.config = config
@@ -389,7 +406,8 @@ class GoogleEntity:
 
         state = self.state
         domain = state.domain
-        features = state.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
+        attributes = state.attributes
+        features = attributes.get(ATTR_SUPPORTED_FEATURES, 0)
 
         if not isinstance(features, int):
             _LOGGER.warning(
@@ -404,7 +422,7 @@ class GoogleEntity:
         self._traits = [
             Trait(self.hass, state, self.config)
             for Trait in trait.TRAITS
-            if Trait.supported(domain, features, device_class)
+            if Trait.supported(domain, features, device_class, attributes)
         ]
         return self._traits
 
@@ -479,8 +497,7 @@ class GoogleEntity:
         }
 
         # use aliases
-        aliases = entity_config.get(CONF_ALIASES)
-        if aliases:
+        if aliases := entity_config.get(CONF_ALIASES):
             device["name"]["nicknames"] = [name] + aliases
 
         if self.config.is_local_sdk_active and self.should_expose_local():
@@ -497,16 +514,14 @@ class GoogleEntity:
         for trt in traits:
             device["attributes"].update(trt.sync_attributes())
 
-        room = entity_config.get(CONF_ROOM_HINT)
-        if room:
+        if room := entity_config.get(CONF_ROOM_HINT):
             device["roomHint"] = room
         else:
             area = await _get_area(self.hass, entity_entry, device_entry)
             if area and area.name:
                 device["roomHint"] = area.name
 
-        device_info = await _get_device_info(device_entry)
-        if device_info:
+        if device_info := await _get_device_info(device_entry):
             device["deviceInfo"] = device_info
 
         return device
@@ -578,7 +593,7 @@ def deep_update(target, source):
 
 
 @callback
-def async_get_entities(hass, config) -> List[GoogleEntity]:
+def async_get_entities(hass, config) -> list[GoogleEntity]:
     """Return all entities that are supported by Google."""
     entities = []
     for state in hass.states.async_all():

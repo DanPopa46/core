@@ -40,9 +40,11 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         conf = config
         coordinator = None
         rest = create_rest_data_from_config(hass, conf)
-        await rest.async_update()
+        await rest.async_update(log_errors=False)
 
     if rest.data is None:
+        if rest.last_exception:
+            raise PlatformNotReady from rest.last_exception
         raise PlatformNotReady
 
     name = conf.get(CONF_NAME)
@@ -83,13 +85,13 @@ class RestBinarySensor(RestEntity, BinarySensorEntity):
         resource_template,
     ):
         """Initialize a REST binary sensor."""
-        super().__init__(
-            coordinator, rest, name, device_class, resource_template, force_update
-        )
+        super().__init__(coordinator, rest, name, resource_template, force_update)
         self._state = False
         self._previous_data = None
         self._value_template = value_template
         self._is_on = None
+
+        self._attr_device_class = device_class
 
     @property
     def is_on(self):

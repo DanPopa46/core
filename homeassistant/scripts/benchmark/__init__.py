@@ -1,13 +1,16 @@
 """Script to run benchmarks."""
+from __future__ import annotations
+
 import argparse
 import asyncio
 import collections
+from collections.abc import Callable
 from contextlib import suppress
 from datetime import datetime
 import json
 import logging
 from timeit import default_timer as timer
-from typing import Callable, Dict, TypeVar
+from typing import TypeVar
 
 from homeassistant import core
 from homeassistant.components.websocket_api.const import JSON_DUMP
@@ -21,7 +24,7 @@ from homeassistant.util import dt as dt_util
 
 CALLABLE_T = TypeVar("CALLABLE_T", bound=Callable)  # pylint: disable=invalid-name
 
-BENCHMARKS: Dict[str, Callable] = {}
+BENCHMARKS: dict[str, Callable] = {}
 
 
 def run(args):

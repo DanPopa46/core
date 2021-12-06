@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pydeconz
 
+from homeassistant.components import ssdp
 from homeassistant.components.deconz.config_flow import (
     CONF_MANUAL_INPUT,
     CONF_SERIAL,
@@ -17,11 +18,8 @@ from homeassistant.components.deconz.const import (
     CONF_MASTER_GATEWAY,
     DOMAIN as DECONZ_DOMAIN,
 )
-from homeassistant.components.ssdp import (
-    ATTR_SSDP_LOCATION,
-    ATTR_UPNP_MANUFACTURER_URL,
-    ATTR_UPNP_SERIAL,
-)
+from homeassistant.components.hassio import HassioServiceInfo
+from homeassistant.components.ssdp import ATTR_UPNP_MANUFACTURER_URL, ATTR_UPNP_SERIAL
 from homeassistant.config_entries import (
     SOURCE_HASSIO,
     SOURCE_REAUTH,
@@ -412,11 +410,15 @@ async def test_flow_ssdp_discovery(hass, aioclient_mock):
     """Test that config flow for one discovered bridge works."""
     result = await hass.config_entries.flow.async_init(
         DECONZ_DOMAIN,
-        data={
-            ATTR_SSDP_LOCATION: "http://1.2.3.4:80/",
-            ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
-            ATTR_UPNP_SERIAL: BRIDGEID,
-        },
+        data=ssdp.SsdpServiceInfo(
+            ssdp_usn="mock_usn",
+            ssdp_st="mock_st",
+            ssdp_location="http://1.2.3.4:80/",
+            upnp={
+                ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
+                ATTR_UPNP_SERIAL: BRIDGEID,
+            },
+        ),
         context={"source": SOURCE_SSDP},
     )
 
@@ -442,6 +444,22 @@ async def test_flow_ssdp_discovery(hass, aioclient_mock):
     }
 
 
+async def test_flow_ssdp_bad_discovery(hass, aioclient_mock):
+    """Test that SSDP discovery aborts if manufacturer URL is wrong."""
+    result = await hass.config_entries.flow.async_init(
+        DECONZ_DOMAIN,
+        data=ssdp.SsdpServiceInfo(
+            ssdp_usn="mock_usn",
+            ssdp_st="mock_st",
+            upnp={ATTR_UPNP_MANUFACTURER_URL: "other"},
+        ),
+        context={"source": SOURCE_SSDP},
+    )
+
+    assert result["type"] == RESULT_TYPE_ABORT
+    assert result["reason"] == "not_deconz_bridge"
+
+
 async def test_ssdp_discovery_update_configuration(hass, aioclient_mock):
     """Test if a discovered bridge is configured but updates with new attributes."""
     config_entry = await setup_deconz_integration(hass, aioclient_mock)
@@ -452,11 +470,15 @@ async def test_ssdp_discovery_update_configuration(hass, aioclient_mock):
     ) as mock_setup_entry:
         result = await hass.config_entries.flow.async_init(
             DECONZ_DOMAIN,
-            data={
-                ATTR_SSDP_LOCATION: "http://2.3.4.5:80/",
-                ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
-                ATTR_UPNP_SERIAL: BRIDGEID,
-            },
+            data=ssdp.SsdpServiceInfo(
+                ssdp_usn="mock_usn",
+                ssdp_st="mock_st",
+                ssdp_location="http://2.3.4.5:80/",
+                upnp={
+                    ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
+                    ATTR_UPNP_SERIAL: BRIDGEID,
+                },
+            ),
             context={"source": SOURCE_SSDP},
         )
         await hass.async_block_till_done()
@@ -473,11 +495,15 @@ async def test_ssdp_discovery_dont_update_configuration(hass, aioclient_mock):
 
     result = await hass.config_entries.flow.async_init(
         DECONZ_DOMAIN,
-        data={
-            ATTR_SSDP_LOCATION: "http://1.2.3.4:80/",
-            ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
-            ATTR_UPNP_SERIAL: BRIDGEID,
-        },
+        data=ssdp.SsdpServiceInfo(
+            ssdp_usn="mock_usn",
+            ssdp_st="mock_st",
+            ssdp_location="http://1.2.3.4:80/",
+            upnp={
+                ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
+                ATTR_UPNP_SERIAL: BRIDGEID,
+            },
+        ),
         context={"source": SOURCE_SSDP},
     )
 
@@ -496,11 +522,15 @@ async def test_ssdp_discovery_dont_update_existing_hassio_configuration(
 
     result = await hass.config_entries.flow.async_init(
         DECONZ_DOMAIN,
-        data={
-            ATTR_SSDP_LOCATION: "http://1.2.3.4:80/",
-            ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
-            ATTR_UPNP_SERIAL: BRIDGEID,
-        },
+        data=ssdp.SsdpServiceInfo(
+            ssdp_usn="mock_usn",
+            ssdp_st="mock_st",
+            ssdp_location="http://1.2.3.4:80/",
+            upnp={
+                ATTR_UPNP_MANUFACTURER_URL: DECONZ_MANUFACTURERURL,
+                ATTR_UPNP_SERIAL: BRIDGEID,
+            },
+        ),
         context={"source": SOURCE_SSDP},
     )
 
@@ -513,13 +543,15 @@ async def test_flow_hassio_discovery(hass):
     """Test hassio discovery flow works."""
     result = await hass.config_entries.flow.async_init(
         DECONZ_DOMAIN,
-        data={
-            "addon": "Mock Addon",
-            CONF_HOST: "mock-deconz",
-            CONF_PORT: 80,
-            CONF_SERIAL: BRIDGEID,
-            CONF_API_KEY: API_KEY,
-        },
+        data=HassioServiceInfo(
+            config={
+                "addon": "Mock Addon",
+                CONF_HOST: "mock-deconz",
+                CONF_PORT: 80,
+                CONF_SERIAL: BRIDGEID,
+                CONF_API_KEY: API_KEY,
+            }
+        ),
         context={"source": SOURCE_HASSIO},
     )
     assert result["type"] == RESULT_TYPE_FORM
@@ -527,8 +559,6 @@ async def test_flow_hassio_discovery(hass):
     assert result["description_placeholders"] == {"addon": "Mock Addon"}
 
     with patch(
-        "homeassistant.components.deconz.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.deconz.async_setup_entry",
         return_value=True,
     ) as mock_setup_entry:
@@ -543,7 +573,6 @@ async def test_flow_hassio_discovery(hass):
         CONF_PORT: 80,
         CONF_API_KEY: API_KEY,
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -557,12 +586,14 @@ async def test_hassio_discovery_update_configuration(hass, aioclient_mock):
     ) as mock_setup_entry:
         result = await hass.config_entries.flow.async_init(
             DECONZ_DOMAIN,
-            data={
-                CONF_HOST: "2.3.4.5",
-                CONF_PORT: 8080,
-                CONF_API_KEY: "updated",
-                CONF_SERIAL: BRIDGEID,
-            },
+            data=HassioServiceInfo(
+                config={
+                    CONF_HOST: "2.3.4.5",
+                    CONF_PORT: 8080,
+                    CONF_API_KEY: "updated",
+                    CONF_SERIAL: BRIDGEID,
+                }
+            ),
             context={"source": SOURCE_HASSIO},
         )
         await hass.async_block_till_done()
@@ -581,12 +612,14 @@ async def test_hassio_discovery_dont_update_configuration(hass, aioclient_mock):
 
     result = await hass.config_entries.flow.async_init(
         DECONZ_DOMAIN,
-        data={
-            CONF_HOST: "1.2.3.4",
-            CONF_PORT: 80,
-            CONF_API_KEY: API_KEY,
-            CONF_SERIAL: BRIDGEID,
-        },
+        data=HassioServiceInfo(
+            config={
+                CONF_HOST: "1.2.3.4",
+                CONF_PORT: 80,
+                CONF_API_KEY: API_KEY,
+                CONF_SERIAL: BRIDGEID,
+            }
+        ),
         context={"source": SOURCE_HASSIO},
     )
 

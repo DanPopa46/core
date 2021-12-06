@@ -1,48 +1,38 @@
 """The 1-Wire component."""
-import asyncio
+import logging
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.typing import HomeAssistantType
 
 from .const import DOMAIN, PLATFORMS
 from .onewirehub import CannotConnect, OneWireHub
 
-
-async def async_setup(hass, config):
-    """Set up 1-Wire integrations."""
-    return True
+_LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a 1-Wire proxy for a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
     onewirehub = OneWireHub(hass)
     try:
-        await onewirehub.initialize(config_entry)
+        await onewirehub.initialize(entry)
     except CannotConnect as exc:
         raise ConfigEntryNotReady() from exc
 
-    hass.data[DOMAIN][config_entry.unique_id] = onewirehub
+    hass.data[DOMAIN][entry.entry_id] = onewirehub
 
-    for platform in PLATFORMS:
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(config_entry, platform)
-        )
+    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+
     return True
 
 
-async def async_unload_entry(hass: HomeAssistantType, config_entry: ConfigEntry):
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(config_entry, platform)
-                for platform in PLATFORMS
-            ]
-        )
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        config_entry, PLATFORMS
     )
     if unload_ok:
-        hass.data[DOMAIN].pop(config_entry.unique_id)
+        hass.data[DOMAIN].pop(config_entry.entry_id)
     return unload_ok

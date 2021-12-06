@@ -2,6 +2,7 @@
 import asyncio
 from datetime import timedelta
 import logging
+from typing import final
 
 import voluptuous as vol
 
@@ -160,10 +161,9 @@ class ImageProcessingFaceEntity(ImageProcessingEntity):
             if ATTR_CONFIDENCE not in face:
                 continue
 
-            f_co = face[ATTR_CONFIDENCE]
-            if f_co > confidence:
+            if (f_co := face[ATTR_CONFIDENCE]) > confidence:
                 confidence = f_co
-                for attr in [ATTR_NAME, ATTR_MOTION]:
+                for attr in (ATTR_NAME, ATTR_MOTION):
                     if attr in face:
                         state = face[attr]
                         break
@@ -175,6 +175,7 @@ class ImageProcessingFaceEntity(ImageProcessingEntity):
         """Return the class of this device, from component DEVICE_CLASSES."""
         return "face"
 
+    @final
     @property
     def state_attributes(self):
         """Return device specific state attributes."""
@@ -206,9 +207,12 @@ class ImageProcessingFaceEntity(ImageProcessingEntity):
         """
         # Send events
         for face in faces:
-            if ATTR_CONFIDENCE in face and self.confidence:
-                if face[ATTR_CONFIDENCE] < self.confidence:
-                    continue
+            if (
+                ATTR_CONFIDENCE in face
+                and self.confidence
+                and face[ATTR_CONFIDENCE] < self.confidence
+            ):
+                continue
 
             face.update({ATTR_ENTITY_ID: self.entity_id})
             self.hass.async_add_job(self.hass.bus.async_fire, EVENT_DETECT_FACE, face)

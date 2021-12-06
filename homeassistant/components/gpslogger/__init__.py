@@ -1,18 +1,11 @@
 """Support for GPSLogger."""
+from http import HTTPStatus
+
 from aiohttp import web
 import voluptuous as vol
 
-from homeassistant.components.device_tracker import (
-    ATTR_BATTERY,
-    DOMAIN as DEVICE_TRACKER,
-)
-from homeassistant.const import (
-    ATTR_LATITUDE,
-    ATTR_LONGITUDE,
-    CONF_WEBHOOK_ID,
-    HTTP_OK,
-    HTTP_UNPROCESSABLE_ENTITY,
-)
+from homeassistant.components.device_tracker import ATTR_BATTERY
+from homeassistant.const import ATTR_LATITUDE, ATTR_LONGITUDE, CONF_WEBHOOK_ID, Platform
 from homeassistant.helpers import config_entry_flow
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -27,6 +20,8 @@ from .const import (
     ATTR_SPEED,
     DOMAIN,
 )
+
+PLATFORMS = [Platform.DEVICE_TRACKER]
 
 TRACKER_UPDATE = f"{DOMAIN}_tracker_update"
 
@@ -67,7 +62,9 @@ async def handle_webhook(hass, webhook_id, request):
     try:
         data = WEBHOOK_SCHEMA(dict(await request.post()))
     except vol.MultipleInvalid as error:
-        return web.Response(text=error.error_message, status=HTTP_UNPROCESSABLE_ENTITY)
+        return web.Response(
+            text=error.error_message, status=HTTPStatus.UNPROCESSABLE_ENTITY
+        )
 
     attrs = {
         ATTR_SPEED: data.get(ATTR_SPEED),
@@ -89,7 +86,7 @@ async def handle_webhook(hass, webhook_id, request):
         attrs,
     )
 
-    return web.Response(text=f"Setting location for {device}", status=HTTP_OK)
+    return web.Response(text=f"Setting location for {device}")
 
 
 async def async_setup_entry(hass, entry):
@@ -98,9 +95,8 @@ async def async_setup_entry(hass, entry):
         DOMAIN, "GPSLogger", entry.data[CONF_WEBHOOK_ID], handle_webhook
     )
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, DEVICE_TRACKER)
-    )
+    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+
     return True
 
 
@@ -108,8 +104,7 @@ async def async_unload_entry(hass, entry):
     """Unload a config entry."""
     hass.components.webhook.async_unregister(entry.data[CONF_WEBHOOK_ID])
     hass.data[DOMAIN]["unsub_device_tracker"].pop(entry.entry_id)()
-    await hass.config_entries.async_forward_entry_unload(entry, DEVICE_TRACKER)
-    return True
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async_remove_entry = config_entry_flow.webhook_async_remove_entry

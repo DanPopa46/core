@@ -18,7 +18,6 @@ INTENTS_API_ENDPOINT = "/api/alexa"
 
 
 class SpeechType(enum.Enum):
-    # pylint: disable=invalid-name
     """The Alexa speech types."""
 
     plaintext = "PlainText"
@@ -29,7 +28,6 @@ SPEECH_MAPPINGS = {"plain": SpeechType.plaintext, "ssml": SpeechType.ssml}
 
 
 class CardType(enum.Enum):
-    # pylint: disable=invalid-name
     """The Alexa card types."""
 
     simple = "Simple"
@@ -122,9 +120,7 @@ async def async_handle_message(hass, message):
     req = message.get("request")
     req_type = req["type"]
 
-    handler = HANDLERS.get(req_type)
-
-    if not handler:
+    if not (handler := HANDLERS.get(req_type)):
         raise UnknownRequest(f"Received unknown request {req_type}")
 
     return await handler(hass, message)

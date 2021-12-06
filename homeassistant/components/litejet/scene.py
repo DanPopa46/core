@@ -1,12 +1,9 @@
 """Support for LiteJet scenes."""
-import logging
 from typing import Any
 
 from homeassistant.components.scene import Scene
 
 from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
 
 ATTR_NUMBER = "number"
 
@@ -29,7 +26,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class LiteJetScene(Scene):
     """Representation of a single LiteJet scene."""
 
-    def __init__(self, entry_id, lj, i, name):
+    def __init__(self, entry_id, lj, i, name):  # pylint: disable=invalid-name
         """Initialize the scene."""
         self._entry_id = entry_id
         self._lj = lj
@@ -47,7 +44,7 @@ class LiteJetScene(Scene):
         return f"{self._entry_id}_{self._index}"
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         """Return the device-specific state attributes."""
         return {ATTR_NUMBER: self._index}
 

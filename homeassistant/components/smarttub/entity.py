@@ -1,8 +1,7 @@
-"""SmartTub integration."""
-import logging
-
+"""Base classes for SmartTub entities."""
 import smarttub
 
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -11,14 +10,12 @@ from homeassistant.helpers.update_coordinator import (
 from .const import DOMAIN
 from .helpers import get_spa_name
 
-_LOGGER = logging.getLogger(__name__)
-
 
 class SmartTubEntity(CoordinatorEntity):
     """Base class for SmartTub entities."""
 
     def __init__(
-        self, coordinator: DataUpdateCoordinator, spa: smarttub.Spa, entity_type
+        self, coordinator: DataUpdateCoordinator, spa: smarttub.Spa, entity_name
     ):
         """Initialize the entity.
 
@@ -28,27 +25,27 @@ class SmartTubEntity(CoordinatorEntity):
 
         super().__init__(coordinator)
         self.spa = spa
-        self._entity_type = entity_type
+        self._entity_name = entity_name
 
     @property
     def unique_id(self) -> str:
         """Return a unique id for the entity."""
-        return f"{self.spa.id}-{self._entity_type}"
+        return f"{self.spa.id}-{self._entity_name}"
 
     @property
-    def device_info(self) -> str:
+    def device_info(self) -> DeviceInfo:
         """Return device info."""
-        return {
-            "identifiers": {(DOMAIN, self.spa.id)},
-            "manufacturer": self.spa.brand,
-            "model": self.spa.model,
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.spa.id)},
+            manufacturer=self.spa.brand,
+            model=self.spa.model,
+        )
 
     @property
     def name(self) -> str:
         """Return the name of the entity."""
         spa_name = get_spa_name(self.spa)
-        return f"{spa_name} {self._entity_type}"
+        return f"{spa_name} {self._entity_name}"
 
     @property
     def spa_status(self) -> smarttub.SpaState:

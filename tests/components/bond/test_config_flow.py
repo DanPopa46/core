@@ -1,11 +1,15 @@
 """Test the Bond config flow."""
-from typing import Any, Dict
-from unittest.mock import Mock, patch
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import MagicMock, Mock, patch
 
 from aiohttp import ClientConnectionError, ClientResponseError
 
-from homeassistant import config_entries, core, setup
+from homeassistant import config_entries, core
+from homeassistant.components import zeroconf
 from homeassistant.components.bond.const import DOMAIN
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_ACCESS_TOKEN, CONF_HOST
 
 from .common import (
@@ -22,7 +26,7 @@ from tests.common import MockConfigEntry
 
 async def test_user_form(hass: core.HomeAssistant):
     """Test we get the user initiated form."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -33,7 +37,7 @@ async def test_user_form(hass: core.HomeAssistant):
         return_value={"bondid": "test-bond-id"}
     ), patch_bond_device_ids(
         return_value=["f6776c11", "f6776c12"]
-    ), patch_bond_bridge(), patch_bond_device_properties(), patch_bond_device(), _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    ), patch_bond_bridge(), patch_bond_device_properties(), patch_bond_device(), _patch_async_setup_entry() as mock_setup_entry:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_HOST: "some host", CONF_ACCESS_TOKEN: "test-token"},
@@ -46,13 +50,12 @@ async def test_user_form(hass: core.HomeAssistant):
         CONF_HOST: "some host",
         CONF_ACCESS_TOKEN: "test-token",
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
 async def test_user_form_with_non_bridge(hass: core.HomeAssistant):
     """Test setup a smart by bond fan."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -69,7 +72,7 @@ async def test_user_form_with_non_bridge(hass: core.HomeAssistant):
         }
     ), patch_bond_bridge(
         return_value={}
-    ), _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    ), _patch_async_setup_entry() as mock_setup_entry:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_HOST: "some host", CONF_ACCESS_TOKEN: "test-token"},
@@ -82,7 +85,6 @@ async def test_user_form_with_non_bridge(hass: core.HomeAssistant):
         CONF_HOST: "some host",
         CONF_ACCESS_TOKEN: "test-token",
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -170,15 +172,13 @@ async def test_user_form_one_entry_per_device_allowed(hass: core.HomeAssistant):
         data={CONF_HOST: "some host", CONF_ACCESS_TOKEN: "test-token"},
     ).add_to_hass(hass)
 
-    await setup.async_setup_component(hass, "persistent_notification", {})
-
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
 
     with patch_bond_version(
         return_value={"bondid": "already-registered-bond-id"}
-    ), patch_bond_bridge(), patch_bond_device_ids(), _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    ), patch_bond_bridge(), patch_bond_device_ids(), _patch_async_setup_entry() as mock_setup_entry:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_HOST: "some host", CONF_ACCESS_TOKEN: "test-token"},
@@ -188,24 +188,31 @@ async def test_user_form_one_entry_per_device_allowed(hass: core.HomeAssistant):
     assert result2["reason"] == "already_configured"
 
     await hass.async_block_till_done()
-    assert len(mock_setup.mock_calls) == 0
     assert len(mock_setup_entry.mock_calls) == 0
 
 
 async def test_zeroconf_form(hass: core.HomeAssistant):
     """Test we get the discovery form."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_ZEROCONF},
-        data={"name": "test-bond-id.some-other-tail-info", "host": "test-host"},
-    )
-    assert result["type"] == "form"
-    assert result["errors"] == {}
+
+    with patch_bond_version(), patch_bond_token():
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=zeroconf.ZeroconfServiceInfo(
+                host="test-host",
+                hostname="mock_hostname",
+                name="test-bond-id.some-other-tail-info",
+                port=None,
+                properties={},
+                type="mock_type",
+            ),
+        )
+        assert result["type"] == "form"
+        assert result["errors"] == {}
 
     with patch_bond_version(
         return_value={"bondid": "test-bond-id"}
-    ), patch_bond_bridge(), patch_bond_device_ids(), _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    ), patch_bond_bridge(), patch_bond_device_ids(), _patch_async_setup_entry() as mock_setup_entry:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_ACCESS_TOKEN: "test-token"},
@@ -218,24 +225,30 @@ async def test_zeroconf_form(hass: core.HomeAssistant):
         CONF_HOST: "test-host",
         CONF_ACCESS_TOKEN: "test-token",
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
 async def test_zeroconf_form_token_unavailable(hass: core.HomeAssistant):
     """Test we get the discovery form and we handle the token being unavailable."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     with patch_bond_version(), patch_bond_token():
         result = await hass.config_entries.flow.async_init(
             DOMAIN,
             context={"source": config_entries.SOURCE_ZEROCONF},
-            data={"name": "test-bond-id.some-other-tail-info", "host": "test-host"},
+            data=zeroconf.ZeroconfServiceInfo(
+                host="test-host",
+                hostname="mock_hostname",
+                name="test-bond-id.some-other-tail-info",
+                port=None,
+                properties={},
+                type="mock_type",
+            ),
         )
         await hass.async_block_till_done()
     assert result["type"] == "form"
     assert result["errors"] == {}
 
-    with patch_bond_version(), patch_bond_bridge(), patch_bond_device_ids(), _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    with patch_bond_version(), patch_bond_bridge(), patch_bond_device_ids(), _patch_async_setup_entry() as mock_setup_entry:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_ACCESS_TOKEN: "test-token"},
@@ -248,13 +261,12 @@ async def test_zeroconf_form_token_unavailable(hass: core.HomeAssistant):
         CONF_HOST: "test-host",
         CONF_ACCESS_TOKEN: "test-token",
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
 async def test_zeroconf_form_with_token_available(hass: core.HomeAssistant):
     """Test we get the discovery form when we can get the token."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     with patch_bond_version(return_value={"bondid": "test-bond-id"}), patch_bond_token(
         return_value={"token": "discovered-token"}
     ), patch_bond_bridge(
@@ -263,13 +275,20 @@ async def test_zeroconf_form_with_token_available(hass: core.HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN,
             context={"source": config_entries.SOURCE_ZEROCONF},
-            data={"name": "test-bond-id.some-other-tail-info", "host": "test-host"},
+            data=zeroconf.ZeroconfServiceInfo(
+                host="test-host",
+                hostname="mock_hostname",
+                name="test-bond-id.some-other-tail-info",
+                port=None,
+                properties={},
+                type="mock_type",
+            ),
         )
         await hass.async_block_till_done()
     assert result["type"] == "form"
     assert result["errors"] == {}
 
-    with _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    with _patch_async_setup_entry() as mock_setup_entry:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {},
@@ -282,13 +301,11 @@ async def test_zeroconf_form_with_token_available(hass: core.HomeAssistant):
         CONF_HOST: "test-host",
         CONF_ACCESS_TOKEN: "discovered-token",
     }
-    assert len(mock_setup.mock_calls) == 1
     assert len(mock_setup_entry.mock_calls) == 1
 
 
 async def test_zeroconf_already_configured(hass: core.HomeAssistant):
     """Test starting a flow from discovery when already configured."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -297,22 +314,104 @@ async def test_zeroconf_already_configured(hass: core.HomeAssistant):
     )
     entry.add_to_hass(hass)
 
-    with _patch_async_setup() as mock_setup, _patch_async_setup_entry() as mock_setup_entry:
+    with _patch_async_setup_entry() as mock_setup_entry:
         result = await hass.config_entries.flow.async_init(
             DOMAIN,
             context={"source": config_entries.SOURCE_ZEROCONF},
-            data={
-                "name": "already-registered-bond-id.some-other-tail-info",
-                "host": "updated-host",
-            },
+            data=zeroconf.ZeroconfServiceInfo(
+                host="updated-host",
+                hostname="mock_hostname",
+                name="already-registered-bond-id.some-other-tail-info",
+                port=None,
+                properties={},
+                type="mock_type",
+            ),
         )
+        await hass.async_block_till_done()
 
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"
     assert entry.data["host"] == "updated-host"
+    assert len(mock_setup_entry.mock_calls) == 1
 
-    await hass.async_block_till_done()
-    assert len(mock_setup.mock_calls) == 0
+
+async def test_zeroconf_already_configured_refresh_token(hass: core.HomeAssistant):
+    """Test starting a flow from zeroconf when already configured and the token is out of date."""
+    entry2 = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="not-the-same-bond-id",
+        data={CONF_HOST: "stored-host", CONF_ACCESS_TOKEN: "correct-token"},
+    )
+    entry2.add_to_hass(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="already-registered-bond-id",
+        data={CONF_HOST: "stored-host", CONF_ACCESS_TOKEN: "incorrect-token"},
+    )
+    entry.add_to_hass(hass)
+
+    with patch_bond_version(
+        side_effect=ClientResponseError(MagicMock(), MagicMock(), status=401)
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+
+    with _patch_async_setup_entry() as mock_setup_entry, patch_bond_token(
+        return_value={"token": "discovered-token"}
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=zeroconf.ZeroconfServiceInfo(
+                host="updated-host",
+                hostname="mock_hostname",
+                name="already-registered-bond-id.some-other-tail-info",
+                port=None,
+                properties={},
+                type="mock_type",
+            ),
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "already_configured"
+    assert entry.data["host"] == "updated-host"
+    assert entry.data[CONF_ACCESS_TOKEN] == "discovered-token"
+    # entry2 should not get changed
+    assert entry2.data[CONF_ACCESS_TOKEN] == "correct-token"
+    assert len(mock_setup_entry.mock_calls) == 1
+
+
+async def test_zeroconf_already_configured_no_reload_same_host(
+    hass: core.HomeAssistant,
+):
+    """Test starting a flow from zeroconf when already configured does not reload if the host is the same."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="already-registered-bond-id",
+        data={CONF_HOST: "stored-host", CONF_ACCESS_TOKEN: "correct-token"},
+    )
+    entry.add_to_hass(hass)
+
+    with _patch_async_setup_entry() as mock_setup_entry, patch_bond_token(
+        return_value={"token": "correct-token"}
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=zeroconf.ZeroconfServiceInfo(
+                host="stored-host",
+                hostname="mock_hostname",
+                name="already-registered-bond-id.some-other-tail-info",
+                port=None,
+                properties={},
+                type="mock_type",
+            ),
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "already_configured"
     assert len(mock_setup_entry.mock_calls) == 0
 
 
@@ -321,10 +420,14 @@ async def test_zeroconf_form_unexpected_error(hass: core.HomeAssistant):
     await _help_test_form_unexpected_error(
         hass,
         source=config_entries.SOURCE_ZEROCONF,
-        initial_input={
-            "name": "test-bond-id.some-other-tail-info",
-            "host": "test-host",
-        },
+        initial_input=zeroconf.ZeroconfServiceInfo(
+            host="test-host",
+            hostname="mock_hostname",
+            name="test-bond-id.some-other-tail-info",
+            port=None,
+            properties={},
+            type="mock_type",
+        ),
         user_input={CONF_ACCESS_TOKEN: "test-token"},
         error=Exception(),
     )
@@ -334,14 +437,15 @@ async def _help_test_form_unexpected_error(
     hass: core.HomeAssistant,
     *,
     source: str,
-    initial_input: Dict[str, Any] = None,
-    user_input: Dict[str, Any],
+    initial_input: dict[str, Any] = None,
+    user_input: dict[str, Any],
     error: Exception,
 ):
     """Test we handle unexpected error gracefully."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": source}, data=initial_input
-    )
+    with patch_bond_token():
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": source}, data=initial_input
+        )
 
     with patch_bond_version(
         return_value={"bond_id": "test-bond-id"}
@@ -352,10 +456,6 @@ async def _help_test_form_unexpected_error(
 
     assert result2["type"] == "form"
     assert result2["errors"] == {"base": "unknown"}
-
-
-def _patch_async_setup():
-    return patch("homeassistant.components.bond.async_setup", return_value=True)
 
 
 def _patch_async_setup_entry():

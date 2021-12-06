@@ -4,7 +4,7 @@ from unittest.mock import patch
 from pyplaato.models.device import PlaatoDeviceType
 import pytest
 
-from homeassistant import config_entries, data_entry_flow, setup
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.components.plaato.const import (
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
@@ -34,7 +34,7 @@ def mock_webhook_id():
 
 async def test_show_config_form(hass):
     """Test show configuration form."""
-    await setup.async_setup_component(hass, "persistent_notification", {})
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -243,8 +243,6 @@ async def test_options(hass):
     config_entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.plaato.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.plaato.async_setup_entry", return_value=True
     ) as mock_setup_entry:
 
@@ -266,7 +264,6 @@ async def test_options(hass):
         assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
         assert result["data"][CONF_SCAN_INTERVAL] == 10
 
-        assert len(mock_setup.mock_calls) == 1
         assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -281,8 +278,6 @@ async def test_options_webhook(hass, webhook_id):
     config_entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.plaato.async_setup", return_value=True
-    ) as mock_setup, patch(
         "homeassistant.components.plaato.async_setup_entry", return_value=True
     ) as mock_setup_entry:
 
@@ -305,5 +300,4 @@ async def test_options_webhook(hass, webhook_id):
         assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
         assert result["data"][CONF_WEBHOOK_ID] == CONF_WEBHOOK_ID
 
-        assert len(mock_setup.mock_calls) == 1
         assert len(mock_setup_entry.mock_calls) == 1

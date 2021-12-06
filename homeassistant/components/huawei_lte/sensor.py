@@ -1,9 +1,11 @@
 """Support for Huawei LTE sensors."""
+from __future__ import annotations
 
 from bisect import bisect
+from collections.abc import Callable
 import logging
 import re
-from typing import Callable, Dict, List, NamedTuple, Optional, Pattern, Tuple, Union
+from typing import NamedTuple
 
 import attr
 
@@ -11,18 +13,25 @@ from homeassistant.components.sensor import (
     DEVICE_CLASS_BATTERY,
     DEVICE_CLASS_SIGNAL_STRENGTH,
     DOMAIN as SENSOR_DOMAIN,
+    STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL_INCREASING,
+    SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_URL,
     DATA_BYTES,
     DATA_RATE_BYTES_PER_SECOND,
+    ENTITY_CATEGORY_CONFIG,
+    ENTITY_CATEGORY_DIAGNOSTIC,
+    FREQUENCY_MEGAHERTZ,
     PERCENTAGE,
     STATE_UNKNOWN,
     TIME_SECONDS,
 )
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.typing import HomeAssistantType, StateType
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
 
 from . import HuaweiLteBaseEntity
 from .const import (
@@ -45,29 +54,52 @@ _LOGGER = logging.getLogger(__name__)
 class SensorMeta(NamedTuple):
     """Metadata for defining sensors."""
 
-    name: Optional[str] = None
-    device_class: Optional[str] = None
-    icon: Union[str, Callable[[StateType], str], None] = None
-    unit: Optional[str] = None
+    name: str | None = None
+    device_class: str | None = None
+    icon: str | Callable[[StateType], str] | None = None
+    unit: str | None = None
+    state_class: str | None = None
     enabled_default: bool = False
-    include: Optional[Pattern[str]] = None
-    exclude: Optional[Pattern[str]] = None
-    formatter: Optional[Callable[[str], Tuple[StateType, Optional[str]]]] = None
+    entity_category: str | None = None
+    include: re.Pattern[str] | None = None
+    exclude: re.Pattern[str] | None = None
+    formatter: Callable[[str], tuple[StateType, str | None]] | None = None
 
 
-SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
+SENSOR_META: dict[str | tuple[str, str], SensorMeta] = {
     KEY_DEVICE_INFORMATION: SensorMeta(
-        include=re.compile(r"^WanIP.*Address$", re.IGNORECASE)
+        include=re.compile(r"^(WanIP.*Address|uptime)$", re.IGNORECASE)
     ),
     (KEY_DEVICE_INFORMATION, "WanIPAddress"): SensorMeta(
-        name="WAN IP address", icon="mdi:ip", enabled_default=True
+        name="WAN IP address",
+        icon="mdi:ip",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        enabled_default=True,
     ),
     (KEY_DEVICE_INFORMATION, "WanIPv6Address"): SensorMeta(
-        name="WAN IPv6 address", icon="mdi:ip"
+        name="WAN IPv6 address",
+        icon="mdi:ip",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
-    (KEY_DEVICE_SIGNAL, "band"): SensorMeta(name="Band"),
-    (KEY_DEVICE_SIGNAL, "cell_id"): SensorMeta(name="Cell ID"),
-    (KEY_DEVICE_SIGNAL, "dl_mcs"): SensorMeta(name="Downlink MCS"),
+    (KEY_DEVICE_INFORMATION, "uptime"): SensorMeta(
+        name="Uptime",
+        icon="mdi:timer-outline",
+        unit=TIME_SECONDS,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "band"): SensorMeta(
+        name="Band",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "cell_id"): SensorMeta(
+        name="Cell ID",
+        icon="mdi:transmission-tower",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "dl_mcs"): SensorMeta(
+        name="Downlink MCS",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     (KEY_DEVICE_SIGNAL, "dlbandwidth"): SensorMeta(
         name="Downlink bandwidth",
         icon=lambda x: (
@@ -75,19 +107,48 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:speedometer-medium",
             "mdi:speedometer",
         )[bisect((8, 15), x if x is not None else -1000)],
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
-    (KEY_DEVICE_SIGNAL, "earfcn"): SensorMeta(name="EARFCN"),
-    (KEY_DEVICE_SIGNAL, "lac"): SensorMeta(name="LAC", icon="mdi:map-marker"),
-    (KEY_DEVICE_SIGNAL, "plmn"): SensorMeta(name="PLMN"),
-    (KEY_DEVICE_SIGNAL, "rac"): SensorMeta(name="RAC", icon="mdi:map-marker"),
-    (KEY_DEVICE_SIGNAL, "rrc_status"): SensorMeta(name="RRC status"),
-    (KEY_DEVICE_SIGNAL, "tac"): SensorMeta(name="TAC", icon="mdi:map-marker"),
-    (KEY_DEVICE_SIGNAL, "tdd"): SensorMeta(name="TDD"),
+    (KEY_DEVICE_SIGNAL, "earfcn"): SensorMeta(
+        name="EARFCN",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "lac"): SensorMeta(
+        name="LAC",
+        icon="mdi:map-marker",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "plmn"): SensorMeta(
+        name="PLMN",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "rac"): SensorMeta(
+        name="RAC",
+        icon="mdi:map-marker",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "rrc_status"): SensorMeta(
+        name="RRC status",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "tac"): SensorMeta(
+        name="TAC",
+        icon="mdi:map-marker",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "tdd"): SensorMeta(
+        name="TDD",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     (KEY_DEVICE_SIGNAL, "txpower"): SensorMeta(
         name="Transmit power",
         device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
-    (KEY_DEVICE_SIGNAL, "ul_mcs"): SensorMeta(name="Uplink MCS"),
+    (KEY_DEVICE_SIGNAL, "ul_mcs"): SensorMeta(
+        name="Uplink MCS",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     (KEY_DEVICE_SIGNAL, "ulbandwidth"): SensorMeta(
         name="Uplink bandwidth",
         icon=lambda x: (
@@ -95,12 +156,23 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:speedometer-medium",
             "mdi:speedometer",
         )[bisect((8, 15), x if x is not None else -1000)],
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_DEVICE_SIGNAL, "mode"): SensorMeta(
         name="Mode",
         formatter=lambda x: ({"0": "2G", "2": "3G", "7": "4G"}.get(x, "Unknown"), None),
+        icon=lambda x: (
+            {"2G": "mdi:signal-2g", "3G": "mdi:signal-3g", "4G": "mdi:signal-4g"}.get(
+                str(x), "mdi:signal"
+            )
+        ),
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
-    (KEY_DEVICE_SIGNAL, "pci"): SensorMeta(name="PCI"),
+    (KEY_DEVICE_SIGNAL, "pci"): SensorMeta(
+        name="PCI",
+        icon="mdi:transmission-tower",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     (KEY_DEVICE_SIGNAL, "rsrq"): SensorMeta(
         name="RSRQ",
         device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
@@ -111,6 +183,8 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:signal-cellular-2",
             "mdi:signal-cellular-3",
         )[bisect((-11, -8, -5), x if x is not None else -1000)],
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         enabled_default=True,
     ),
     (KEY_DEVICE_SIGNAL, "rsrp"): SensorMeta(
@@ -123,6 +197,8 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:signal-cellular-2",
             "mdi:signal-cellular-3",
         )[bisect((-110, -95, -80), x if x is not None else -1000)],
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         enabled_default=True,
     ),
     (KEY_DEVICE_SIGNAL, "rssi"): SensorMeta(
@@ -135,6 +211,8 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:signal-cellular-2",
             "mdi:signal-cellular-3",
         )[bisect((-80, -70, -60), x if x is not None else -1000)],
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         enabled_default=True,
     ),
     (KEY_DEVICE_SIGNAL, "sinr"): SensorMeta(
@@ -147,6 +225,8 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:signal-cellular-2",
             "mdi:signal-cellular-3",
         )[bisect((0, 5, 10), x if x is not None else -1000)],
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         enabled_default=True,
     ),
     (KEY_DEVICE_SIGNAL, "rscp"): SensorMeta(
@@ -159,6 +239,8 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:signal-cellular-2",
             "mdi:signal-cellular-3",
         )[bisect((-95, -85, -75), x if x is not None else -1000)],
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_DEVICE_SIGNAL, "ecio"): SensorMeta(
         name="EC/IO",
@@ -170,6 +252,41 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             "mdi:signal-cellular-2",
             "mdi:signal-cellular-3",
         )[bisect((-20, -10, -6), x if x is not None else -1000)],
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "transmode"): SensorMeta(
+        name="Transmission mode",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "cqi0"): SensorMeta(
+        name="CQI 0",
+        icon="mdi:speedometer",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "cqi1"): SensorMeta(
+        name="CQI 1",
+        icon="mdi:speedometer",
+    ),
+    (KEY_DEVICE_SIGNAL, "enodeb_id"): SensorMeta(
+        name="eNodeB ID",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "ltedlfreq"): SensorMeta(
+        name="Downlink frequency",
+        formatter=lambda x: (
+            round(int(x) / 10) if x is not None else None,
+            FREQUENCY_MEGAHERTZ,
+        ),
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    (KEY_DEVICE_SIGNAL, "lteulfreq"): SensorMeta(
+        name="Uplink frequency",
+        formatter=lambda x: (
+            round(int(x) / 10) if x is not None else None,
+            FREQUENCY_MEGAHERTZ,
+        ),
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     KEY_MONITORING_CHECK_NOTIFICATIONS: SensorMeta(
         exclude=re.compile(
@@ -184,10 +301,16 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
         exclude=re.compile(r"^month(duration|lastcleartime)$", re.IGNORECASE)
     ),
     (KEY_MONITORING_MONTH_STATISTICS, "CurrentMonthDownload"): SensorMeta(
-        name="Current month download", unit=DATA_BYTES, icon="mdi:download"
+        name="Current month download",
+        unit=DATA_BYTES,
+        icon="mdi:download",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     (KEY_MONITORING_MONTH_STATISTICS, "CurrentMonthUpload"): SensorMeta(
-        name="Current month upload", unit=DATA_BYTES, icon="mdi:upload"
+        name="Current month upload",
+        unit=DATA_BYTES,
+        icon="mdi:upload",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     KEY_MONITORING_STATUS: SensorMeta(
         include=re.compile(
@@ -199,21 +322,34 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
         name="Battery",
         device_class=DEVICE_CLASS_BATTERY,
         unit=PERCENTAGE,
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_MONITORING_STATUS, "CurrentWifiUser"): SensorMeta(
-        name="WiFi clients connected", icon="mdi:wifi"
+        name="WiFi clients connected",
+        icon="mdi:wifi",
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_MONITORING_STATUS, "PrimaryDns"): SensorMeta(
-        name="Primary DNS server", icon="mdi:ip"
+        name="Primary DNS server",
+        icon="mdi:ip",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_MONITORING_STATUS, "SecondaryDns"): SensorMeta(
-        name="Secondary DNS server", icon="mdi:ip"
+        name="Secondary DNS server",
+        icon="mdi:ip",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_MONITORING_STATUS, "PrimaryIPv6Dns"): SensorMeta(
-        name="Primary IPv6 DNS server", icon="mdi:ip"
+        name="Primary IPv6 DNS server",
+        icon="mdi:ip",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_MONITORING_STATUS, "SecondaryIPv6Dns"): SensorMeta(
-        name="Secondary IPv6 DNS server", icon="mdi:ip"
+        name="Secondary IPv6 DNS server",
+        icon="mdi:ip",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     KEY_MONITORING_TRAFFIC_STATISTICS: SensorMeta(
         exclude=re.compile(r"^showtraffic$", re.IGNORECASE)
@@ -222,29 +358,46 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
         name="Current connection duration", unit=TIME_SECONDS, icon="mdi:timer-outline"
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "CurrentDownload"): SensorMeta(
-        name="Current connection download", unit=DATA_BYTES, icon="mdi:download"
+        name="Current connection download",
+        unit=DATA_BYTES,
+        icon="mdi:download",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "CurrentDownloadRate"): SensorMeta(
         name="Current download rate",
         unit=DATA_RATE_BYTES_PER_SECOND,
         icon="mdi:download",
+        state_class=STATE_CLASS_MEASUREMENT,
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "CurrentUpload"): SensorMeta(
-        name="Current connection upload", unit=DATA_BYTES, icon="mdi:upload"
+        name="Current connection upload",
+        unit=DATA_BYTES,
+        icon="mdi:upload",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "CurrentUploadRate"): SensorMeta(
         name="Current upload rate",
         unit=DATA_RATE_BYTES_PER_SECOND,
         icon="mdi:upload",
+        state_class=STATE_CLASS_MEASUREMENT,
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "TotalConnectTime"): SensorMeta(
-        name="Total connected duration", unit=TIME_SECONDS, icon="mdi:timer-outline"
+        name="Total connected duration",
+        unit=TIME_SECONDS,
+        icon="mdi:timer-outline",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "TotalDownload"): SensorMeta(
-        name="Total download", unit=DATA_BYTES, icon="mdi:download"
+        name="Total download",
+        unit=DATA_BYTES,
+        icon="mdi:download",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     (KEY_MONITORING_TRAFFIC_STATISTICS, "TotalUpload"): SensorMeta(
-        name="Total upload", unit=DATA_BYTES, icon="mdi:upload"
+        name="Total upload",
+        unit=DATA_BYTES,
+        icon="mdi:upload",
+        state_class=STATE_CLASS_TOTAL_INCREASING,
     ),
     KEY_NET_CURRENT_PLMN: SensorMeta(
         exclude=re.compile(r"^(Rat|ShortName|Spn)$", re.IGNORECASE)
@@ -252,12 +405,15 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
     (KEY_NET_CURRENT_PLMN, "State"): SensorMeta(
         name="Operator search mode",
         formatter=lambda x: ({"0": "Auto", "1": "Manual"}.get(x, "Unknown"), None),
+        entity_category=ENTITY_CATEGORY_CONFIG,
     ),
     (KEY_NET_CURRENT_PLMN, "FullName"): SensorMeta(
         name="Operator name",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     (KEY_NET_CURRENT_PLMN, "Numeric"): SensorMeta(
         name="Operator code",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     KEY_NET_NET_MODE: SensorMeta(include=re.compile(r"^NetworkMode$", re.IGNORECASE)),
     (KEY_NET_NET_MODE, "NetworkMode"): SensorMeta(
@@ -274,6 +430,7 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
             }.get(x, "Unknown"),
             None,
         ),
+        entity_category=ENTITY_CATEGORY_CONFIG,
     ),
     (KEY_SMS_SMS_COUNT, "LocalDeleted"): SensorMeta(
         name="SMS deleted (device)",
@@ -327,19 +484,17 @@ SENSOR_META: Dict[Union[str, Tuple[str, str]], SensorMeta] = {
 
 
 async def async_setup_entry(
-    hass: HomeAssistantType,
+    hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: Callable[[List[Entity], bool], None],
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up from config entry."""
-    router = hass.data[DOMAIN].routers[config_entry.data[CONF_URL]]
-    sensors: List[Entity] = []
+    router = hass.data[DOMAIN].routers[config_entry.unique_id]
+    sensors: list[Entity] = []
     for key in SENSOR_KEYS:
-        items = router.data.get(key)
-        if not items:
+        if not (items := router.data.get(key)):
             continue
-        key_meta = SENSOR_META.get(key)
-        if key_meta:
+        if key_meta := SENSOR_META.get(key):
             if key_meta.include:
                 items = filter(key_meta.include.search, items)
             if key_meta.exclude:
@@ -354,15 +509,14 @@ async def async_setup_entry(
     async_add_entities(sensors, True)
 
 
-def format_default(value: StateType) -> Tuple[StateType, Optional[str]]:
+def format_default(value: StateType) -> tuple[StateType, str | None]:
     """Format value."""
     unit = None
     if value is not None:
         # Clean up value and infer unit, e.g. -71dBm, 15 dB
-        match = re.match(
+        if match := re.match(
             r"([>=<]*)(?P<value>.+?)\s*(?P<unit>[a-zA-Z]+)\s*$", str(value)
-        )
-        if match:
+        ):
             try:
                 value = float(match.group("value"))
                 unit = match.group("unit")
@@ -372,7 +526,7 @@ def format_default(value: StateType) -> Tuple[StateType, Optional[str]]:
 
 
 @attr.s
-class HuaweiLteSensor(HuaweiLteBaseEntity):
+class HuaweiLteSensor(HuaweiLteBaseEntity, SensorEntity):
     """Huawei LTE sensor entity."""
 
     key: str = attr.ib()
@@ -380,7 +534,7 @@ class HuaweiLteSensor(HuaweiLteBaseEntity):
     meta: SensorMeta = attr.ib()
 
     _state: StateType = attr.ib(init=False, default=STATE_UNKNOWN)
-    _unit: Optional[str] = attr.ib(init=False)
+    _unit: str | None = attr.ib(init=False)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to needed data on add."""
@@ -401,27 +555,32 @@ class HuaweiLteSensor(HuaweiLteBaseEntity):
         return f"{self.key}.{self.item}"
 
     @property
-    def state(self) -> StateType:
+    def native_value(self) -> StateType:
         """Return sensor state."""
         return self._state
 
     @property
-    def device_class(self) -> Optional[str]:
+    def device_class(self) -> str | None:
         """Return sensor device class."""
         return self.meta.device_class
 
     @property
-    def unit_of_measurement(self) -> Optional[str]:
+    def native_unit_of_measurement(self) -> str | None:
         """Return sensor's unit of measurement."""
         return self.meta.unit or self._unit
 
     @property
-    def icon(self) -> Optional[str]:
+    def icon(self) -> str | None:
         """Return icon for sensor."""
         icon = self.meta.icon
         if callable(icon):
             return icon(self.state)
         return icon
+
+    @property
+    def state_class(self) -> str | None:
+        """Return sensor state class."""
+        return self.meta.state_class
 
     @property
     def entity_registry_enabled_default(self) -> bool:
@@ -442,3 +601,8 @@ class HuaweiLteSensor(HuaweiLteBaseEntity):
 
         self._state, self._unit = formatter(value)
         self._available = value is not None
+
+    @property
+    def entity_category(self) -> str | None:
+        """Return category of entity, if any."""
+        return self.meta.entity_category
